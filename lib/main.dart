@@ -279,6 +279,29 @@ class _DashboardPageState extends State<DashboardPage> {
           appBar: AppBar(
             title: const Text('Finora', style: TextStyle(fontWeight: FontWeight.w800)),
             actions: [
+              IconButton(
+                onPressed: () => showAboutDialog(
+                  context: context,
+                  applicationName: 'Finora',
+                  applicationVersion: '1.0.0',
+                  applicationIcon: const Icon(Icons.account_balance_wallet_rounded, size: 36),
+                  children: const [
+                    SizedBox(height: 12),
+                    Text('Developed by Md Arman'),
+                    SizedBox(height: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.email_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Flexible(child: SelectableText('mdarman0964@gmail.com')),
+                      ],
+                    ),
+                  ],
+                ),
+                icon: const Icon(Icons.info_outline_rounded),
+                tooltip: 'অ্যাপ সম্পর্কে',
+              ),
               IconButton(onPressed: widget.onToggleTheme, icon: const Icon(Icons.dark_mode_outlined), tooltip: 'থিম বদলান'),
               IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout_rounded), tooltip: 'লগআউট'),
             ],
