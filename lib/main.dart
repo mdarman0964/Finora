@@ -13,17 +13,17 @@ import 'services/report_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const HisabKhataApp());
+  runApp(const FinoraApp());
 }
 
-class HisabKhataApp extends StatefulWidget {
-  const HisabKhataApp({super.key});
+class FinoraApp extends StatefulWidget {
+  const FinoraApp({super.key});
 
   @override
-  State<HisabKhataApp> createState() => _HisabKhataAppState();
+  State<FinoraApp> createState() => _FinoraAppState();
 }
 
-class _HisabKhataAppState extends State<HisabKhataApp> {
+class _FinoraAppState extends State<FinoraApp> {
   late final Future<void> _boot = _initialize();
   ThemeMode _themeMode = ThemeMode.light;
 
@@ -35,7 +35,7 @@ class _HisabKhataAppState extends State<HisabKhataApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'HisabKhata Mess Manager',
+        title: 'Finora',
         debugShowCheckedModeBanner: false,
         themeMode: _themeMode,
         theme: ThemeData(
@@ -216,7 +216,7 @@ class _AuthPageState extends State<AuthPage> {
                   children: [
                     const Icon(Icons.account_balance_wallet_rounded, size: 56),
                     const SizedBox(height: 12),
-                    Text('HisabKhata', textAlign: TextAlign.center,
+                    Text('Finora', textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
                     const Text('Mess Manager & Personal Finance', textAlign: TextAlign.center),
                     const SizedBox(height: 28),
@@ -277,7 +277,7 @@ class _DashboardPageState extends State<DashboardPage> {
         final messId = profileSnapshot.data?.data()?['messId'] as String?;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('HisabKhata', style: TextStyle(fontWeight: FontWeight.w800)),
+            title: const Text('Finora', style: TextStyle(fontWeight: FontWeight.w800)),
             actions: [
               IconButton(onPressed: widget.onToggleTheme, icon: const Icon(Icons.dark_mode_outlined), tooltip: 'থিম বদলান'),
               IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout_rounded), tooltip: 'লগআউট'),
