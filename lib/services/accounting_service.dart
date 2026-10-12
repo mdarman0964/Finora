@@ -60,13 +60,6 @@ class AccountingService {
       'ownerUid': uid,
       'createdAt': FieldValue.serverTimestamp(),
     });
-    await _db.collection('messes').doc(messId).collection('members').doc(uid).set({
-      'uid': uid,
-      'displayName': user.displayName ?? user.email ?? 'Member',
-      'email': user.email,
-      'joinedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
     await _db.collection('users').doc(uid).set({
       'displayName': user.displayName ?? user.email ?? 'Member',
       'email': user.email,
@@ -89,6 +82,12 @@ class AccountingService {
       'memberUids': FieldValue.arrayUnion([uid]),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    await _db.collection('messes').doc(messId).collection('members').doc(uid).set({
+      'uid': uid,
+      'displayName': user.displayName ?? 'Member',
+      'joinedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     await _db.collection('users').doc(uid).set({
       'displayName': user.displayName ?? user.email ?? 'Member',
       'email': user.email,
