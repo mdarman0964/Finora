@@ -33,14 +33,16 @@ class AccountingService {
   Future<String> createMess(String name) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) throw ArgumentError('মেসের নাম লিখুন।');
-    final uid = user.uid;
+    final current = user;
+    final uid = current.uid;
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final random = math.Random.secure();
     final code = List.generate(
       10, (_) => alphabet[random.nextInt(alphabet.length)],
     ).join();
     final ref = _db.collection('messes').doc();
-    await ref.set({
+    final batch = _db.batch();
+    batch.set(ref, {
       'name': trimmed,
       'inviteCode': code,
       'defaultSplitStrategy': 'equal',
@@ -49,51 +51,71 @@ class AccountingService {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    await ref.collection('members').doc(uid).set({
+    batch.set(ref.collection('members').doc(uid), {
       'uid': uid,
-      'displayName': user.displayName ?? 'Member',
+      'displayName': current.displayName ?? 'Member',
       'joinedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    await _db.collection('messInvites').doc(code).set({
+    batch.set(_db.collection('messInvites').doc(code), {
       'messId': ref.id,
       'ownerUid': uid,
       'createdAt': FieldValue.serverTimestamp(),
     });
-    await _db.collection('users').doc(uid).set({
-      'displayName': user.displayName ?? user.email ?? 'Member',
-      'email': user.email,
+    batch.set(_db.collection('users').doc(uid), {
+      'displayName': current.displayName ?? current.email ?? 'Member',
+      'email': current.email,
       'messId': ref.id,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    // The mess, owner profile, invite, and private user pointer are committed
+    // together so a transient failure cannot leave a half-created mess.
+    await batch.commit();
     return code;
   }
 
   Future<void> joinMess(String inviteCode) async {
     final code = inviteCode.trim().toUpperCase();
     if (code.isEmpty) throw ArgumentError('ইনভাইট কোড লিখুন।');
-    final invite = await _db.collection('messInvites').doc(code).get();
-    final messId = invite.data()?['messId'] as String?;
-    if (!invite.exists || messId == null) {
+    final inviteSnapshot = await _db.collection('messInvites').doc(code).get();
+    final invite = inviteSnapshot.data();
+    final messId = invite?['messId'] as String?;
+    if (!inviteSnapshot.exists || messId == null) {
       throw StateError('এই ইনভাইট কোডটি পাওয়া যায়নি।');
     }
-    final uid = user.uid;
-    await _db.collection('messes').doc(messId).update({
-      'memberUids': FieldValue.arrayUnion([uid]),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    await _db.collection('messes').doc(messId).collection('members').doc(uid).set({
+    final current = user;
+    final uid = current.uid;
+    final messRef = _db.collection('messes').doc(messId);
+    final messSnapshot = await messRef.get();
+    final mess = messSnapshot.data();
+    if (mess == null || mess['inviteCode'] != code) {
+      throw StateError('ইনভাইট কোডের সঙ্গে মেসের তথ্য মিলছে না।');
+    }
+
+    final existingMembers = (mess['memberUids'] as List<dynamic>? ?? const [])
+        .whereType<String>().toSet();
+    final batch = _db.batch();
+    if (!existingMembers.contains(uid)) {
+      batch.update(messRef, {
+        'memberUids': FieldValue.arrayUnion([uid]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    batch.set(messRef.collection('members').doc(uid), {
       'uid': uid,
-      'displayName': user.displayName ?? 'Member',
-      'joinedAt': FieldValue.serverTimestamp(),
+      'displayName': current.displayName ?? 'Member',
+      if (!existingMembers.contains(uid)) 'joinedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    await _db.collection('users').doc(uid).set({
-      'displayName': user.displayName ?? user.email ?? 'Member',
-      'email': user.email,
+    batch.set(_db.collection('users').doc(uid), {
+      'displayName': current.displayName ?? current.email ?? 'Member',
+      'email': current.email,
       'messId': messId,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    // Membership, shared profile, and the user's active-mess pointer move
+    // atomically; repeated joins simply repair the profile pointer.
+    await batch.commit();
   }
 
   Future<void> ensureCurrentMemberProfile(String messId) async {
