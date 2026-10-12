@@ -700,6 +700,7 @@ class MealsPage extends StatefulWidget {
 class _MealsPageState extends State<MealsPage> {
   final _count = TextEditingController(text: '3');
   bool _saving = false;
+  bool _loadedToday = false;
   String? _message;
   String _monthKey(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}';
   String _dayKey(DateTime date) => '${_monthKey(date)}-${date.day.toString().padLeft(2, '0')}';
@@ -742,7 +743,10 @@ class _MealsPageState extends State<MealsPage> {
         final totalMeals = monthMeals.fold<int>(0, (sum, d) => sum + ((d.data()['count'] as num?)?.toInt() ?? 0));
         final uid = FirebaseAuth.instance.currentUser?.uid;
         final todayDoc = meals.where((d) => d.data()['memberUid'] == uid && d.data()['dateKey'] == today).toList();
-        if (todayDoc.isNotEmpty) _count.text = '${todayDoc.first.data()['count'] ?? 0}';
+        if (!_loadedToday && mealSnapshot.hasData) {
+          if (todayDoc.isNotEmpty) _count.text = '${todayDoc.first.data()['count'] ?? 0}';
+          _loadedToday = true;
+        }
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: widget.service.messTransactions(widget.messId!),
           builder: (context, transactionSnapshot) {
