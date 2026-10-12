@@ -28,8 +28,10 @@ The workflow `.github/workflows/android-apk.yml` runs on pushes to `main` and ca
 
 - Distinguish deposits into mess cash from expenses paid directly by a member.
 - Avoid double-counting the same expense as both a cash expense and a member-paid expense.
-- Meal rate = eligible food expense / total counted meals (meal counting and rate calculation are not implemented yet).
-- Non-food shared-cost allocation rules, approvals, monthly closing, and detailed meal management remain follow-up work.
+- Daily per-member meal counts with same-day updates, monthly total meals, eligible food-expense tagging, and meal-rate calculation.
+- Manager-configurable default expense allocation for new records: equal share, meal-count-based share, or payer-accounted share.
+- Monthly PDF/Excel report filters for the latest 12 months.
+- Custom percentage allocations, approvals, monthly closing/archive, carry-forward balances, and verified Bengali-font embedding in PDF remain follow-up work.
 - Personal ledgers and loans are private by default.
 - Firebase Security Rules enforce access to private records and shared mess records. Test rules with Firebase Emulator and multiple accounts before storing real financial data.
 
