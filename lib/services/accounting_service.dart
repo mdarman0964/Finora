@@ -96,14 +96,35 @@ class AccountingService {
     }, SetOptions(merge: true));
   }
 
+  Future<void> ensureCurrentMemberProfile(String messId) async {
+    final current = user;
+    final uid = current.uid;
+    final ref = _db.collection('messes').doc(messId).collection('members').doc(uid);
+    final snapshot = await ref.get();
+    final displayName = (current.displayName ?? '').trim();
+    final savedName = (snapshot.data()?['displayName'] as String? ?? '').trim();
+    if (!snapshot.exists || (displayName.isNotEmpty && displayName != savedName)) {
+      await ref.set({
+        'uid': uid,
+        'displayName': displayName.isNotEmpty ? displayName : 'সদস্য',
+        if (snapshot.data()?['joinedAt'] == null) 'joinedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+  }
+
   Future<Map<String, Map<String, dynamic>>> getMemberProfiles(
     String messId,
     List<String> memberUids,
   ) async {
     final ids = memberUids.where((uid) => uid.isNotEmpty).toSet().toList();
+    final currentUid = user.uid;
+    // Backfill only the signed-in member's own shared profile. Firestore rules
+    // deliberately prevent reading another member's private /users document.
+    if (ids.contains(currentUid)) {
+      await ensureCurrentMemberProfile(messId);
+    }
     final profiles = <String, Map<String, dynamic>>{};
-    // Member display data lives under the shared mess, not in private user
-    // documents, so the UI never needs cross-account access to /users.
     for (var start = 0; start < ids.length; start += 10) {
       final batch = ids.skip(start).take(10).toList();
       final snapshot = await _db.collection('messes').doc(messId)
@@ -114,6 +135,54 @@ class AccountingService {
       }
     }
     return profiles;
+  }
+
+  String monthKey(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}';
+
+  Future<Map<String, dynamic>?> latestMonthClosure(String messId) async {
+    final snapshot = await _db.collection('messes').doc(messId)
+        .collection('monthClosures')
+        .orderBy('monthKey', descending: true)
+        .limit(1)
+        .get();
+    return snapshot.docs.isEmpty ? null : snapshot.docs.first.data();
+  }
+
+  Future<void> closeMessMonth({
+    required String messId,
+    required DateTime month,
+    required Map<String, int> balanceSnapshot,
+    required int totalMeals,
+    required int mealEligibleExpenseMinor,
+    required int incomeMinor,
+    required int expenseMinor,
+  }) async {
+    final uid = user.uid;
+    final key = monthKey(month);
+    final messRef = _db.collection('messes').doc(messId);
+    final closureRef = messRef.collection('monthClosures').doc(key);
+    await _db.runTransaction((transaction) async {
+      final mess = await transaction.get(messRef);
+      final existing = await transaction.get(closureRef);
+      if (!mess.exists || mess.data()?['ownerUid'] != uid) {
+        throw StateError('শুধু মেসের মালিক মাসের হিসাব বন্ধ করতে পারবেন।');
+      }
+      if (existing.exists) {
+        throw StateError('$key মাসের হিসাব আগে থেকেই বন্ধ করা হয়েছে।');
+      }
+      transaction.set(closureRef, {
+        'monthKey': key,
+        'closedBy': uid,
+        'closedAt': FieldValue.serverTimestamp(),
+        'balanceSnapshot': balanceSnapshot,
+        'totalMeals': totalMeals,
+        'mealEligibleExpenseMinor': mealEligibleExpenseMinor,
+        'incomeMinor': incomeMinor,
+        'expenseMinor': expenseMinor,
+        'currencyCode': 'BDT',
+      });
+    });
   }
 
   Future<String?> currentMessId() async {
