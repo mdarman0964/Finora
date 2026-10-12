@@ -128,7 +128,8 @@ class AccountingService {
     final snapshot = await ref.get();
     final displayName = (current.displayName ?? '').trim();
     final savedName = (snapshot.data()?['displayName'] as String? ?? '').trim();
-    if (!snapshot.exists || (displayName.isNotEmpty && displayName != savedName)) {
+    final savedEmail = (snapshot.data()?['email'] as String? ?? '').trim();
+    if (!snapshot.exists || (displayName.isNotEmpty && displayName != savedName) || savedEmail != (current.email ?? '')) {
       await ref.set({
         'uid': uid,
         'displayName': displayName.isNotEmpty ? displayName : 'সদস্য',
