@@ -1,7 +1,7 @@
 name: hisabkhata_mess_manager
 description: Shared mess accounting and private personal finance manager.
 publish_to: "none"
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -10,6 +10,16 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  firebase_core: ^3.15.2
+  firebase_auth: ^5.7.0
+  cloud_firestore: ^5.6.12
+  firebase_storage: ^12.4.10
+  image_picker: ^1.1.2
+  intl: ^0.20.2
+  pdf: ^3.11.3
+  excel: ^4.0.6
+  path_provider: ^2.1.5
+  share_plus: ^12.0.1
 
 dev_dependencies:
   flutter_test:
