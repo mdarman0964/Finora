@@ -744,7 +744,7 @@ class _MealsPageState extends State<MealsPage> {
       if (mounted) setState(() => _message = 'আজকের মিলের হিসাব সংরক্ষণ হয়েছে।');
     } catch (e) {
       if (mounted) setState(() => _message = e.toString());
-    } finally { if (mounted) setState(() => _saving = false); }
+    } finally { if (mounted) { setState(() => _saving = false); } }
   }
 
   @override
@@ -763,7 +763,7 @@ class _MealsPageState extends State<MealsPage> {
       builder: (context, mealSnapshot) {
         final meals = mealSnapshot.data?.docs ?? [];
         final monthMeals = meals.where((d) => (d.data()['dateKey'] as String? ?? '').startsWith(month)).toList();
-        final totalMeals = monthMeals.fold<int>(0, (sum, d) => sum + ((d.data()['count'] as num?)?.toInt() ?? 0));
+        final totalMeals = monthMeals.fold<int>(0, (total, d) => total + ((d.data()['count'] as num?)?.toInt() ?? 0));
         final uid = FirebaseAuth.instance.currentUser?.uid;
         final todayDoc = meals.where((d) => d.data()['memberUid'] == uid && d.data()['dateKey'] == today).toList();
         if (!_loadedToday && mealSnapshot.hasData) {
@@ -773,10 +773,10 @@ class _MealsPageState extends State<MealsPage> {
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: widget.service.messTransactions(widget.messId!),
           builder: (context, transactionSnapshot) {
-            final eligibleMinor = (transactionSnapshot.data?.docs ?? []).fold<int>(0, (sum, doc) {
+            final eligibleMinor = (transactionSnapshot.data?.docs ?? []).fold<int>(0, (total, doc) {
               final data = doc.data(); final date = data['transactionDate']; final kind = data['kind'];
               if (data['mealEligible'] == true && (kind == 'messExpense' || kind == 'memberPaidExpense') && date is Timestamp && _monthKey(date.toDate()) == month) {
-                return sum + ((data['amountMinor'] as num?)?.toInt() ?? 0);
+                return total + ((data['amountMinor'] as num?)?.toInt() ?? 0);
               }
               return sum;
             });
