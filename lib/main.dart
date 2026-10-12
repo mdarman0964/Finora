@@ -758,9 +758,11 @@ class _MealsPageState extends State<MealsPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.messId == null) return const Center(child: Padding(
-      padding: EdgeInsets.all(24), child: Text('মিলের হিসাব রাখতে আগে মেস তৈরি করুন বা যোগ দিন.', textAlign: TextAlign.center),
-    ));
+    if (widget.messId == null) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(24), child: Text('মিলের হিসাব রাখতে আগে মেস তৈরি করুন বা যোগ দিন.', textAlign: TextAlign.center),
+      ));
+    }
     final now = DateTime.now();
     final month = _monthKey(now);
     final today = _dayKey(now);
@@ -867,7 +869,7 @@ class MemberBalancesPage extends StatelessWidget {
                   builder: (context, profileSnapshot) {
                     final profiles = profileSnapshot.data ?? const <String, Map<String, dynamic>>{};
                     final settlements = SettlementCalculator.calculate(Map.fromEntries(balances));
-                    final totalBalance = balances.fold<int>(0, (sum, entry) => sum + entry.value);
+                    final totalBalance = balances.fold<int>(0, (total, entry) => total + entry.value);
                     String memberLabel(String uid) {
                       final profile = profiles[uid] ?? const <String, dynamic>{};
                       final name = (profile['displayName'] as String? ?? '').trim();
