@@ -35,8 +35,8 @@ jobs:
 
       - name: Generate Android platform files
         run: |
-          flutter create --platforms=android --org com.hisabkhata --project-name hisabkhata_mess_manager /tmp/hisabkhata_android
-          cp -R /tmp/hisabkhata_android/android ./android
+          flutter create --platforms=android --org com.finora --project-name finora /tmp/finora_android
+          cp -R /tmp/finora_android/android ./android
 
       - name: Resolve dependencies
         run: flutter pub get
@@ -67,7 +67,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hisabkhata-mess-manager-apk
+          name: finora-android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
