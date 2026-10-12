@@ -12,11 +12,14 @@ class GoogleDriveReceiptService {
       : _googleSignIn = googleSignIn ??
             GoogleSignIn(
               scopes: <String>[drive.DriveApi.driveFileScope],
+              clientId: _iosClientId.isEmpty ? null : _iosClientId,
               serverClientId: _serverClientId.isEmpty ? null : _serverClientId,
             );
 
   static const _serverClientId =
       String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+  static const _iosClientId =
+      String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
 
   final GoogleSignIn _googleSignIn;
 
