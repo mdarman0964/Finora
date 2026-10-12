@@ -49,6 +49,10 @@ For a local build, provide the same `--dart-define` values to `flutter build apk
 - Mess records and personal transactions are stored in Firestore; Firestore snapshots provide live synchronization.
 - Receipt images are uploaded to Firebase Storage. Personal receipts are owner-only; mess receipts are readable by authenticated members of that mess.
 - Loans and repayment events are stored under the signed-in user's private path.
+- Daily per-member meal counts are stored under each mess; the same member can update their count for a given day.
+- Food-related expenses can be explicitly marked as meal-rate eligible. Monthly meal rate is eligible food expense divided by total counted meals.
+- Mess owners can choose the default strategy used on new expense records: equal, meal-count-based, or payer-accounted.
+- Reports can be filtered by month before PDF/XLSX export. The current PDF font has not yet been verified for Bengali glyph coverage.
 - PDF and XLSX exports are generated on-device and shared using the platform share sheet.
 - Personal finance is private by default. Do not add personal transaction data to shared mess collections.
 - This is an initial implementation. Test rules and multi-user access with two test accounts before using real financial records.
