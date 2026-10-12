@@ -41,9 +41,15 @@ class BalanceCalculator {
 
       final strategy = row['splitStrategy'] as String? ?? 'equal';
       final historicalMembers = row['memberUidsAtPosting'];
-      final transactionMembers = historicalMembers is List
-          ? historicalMembers.whereType<String>().where((uid) => uid.isNotEmpty).toSet().toList()..sort()
-          : members.toList()..sort();
+      final transactionMembers = <String>[];
+      if (historicalMembers is List) {
+        transactionMembers.addAll(
+          historicalMembers.whereType<String>().where((uid) => uid.isNotEmpty),
+        );
+      } else {
+        transactionMembers.addAll(members);
+      }
+      transactionMembers.sort();
       final allocations = _allocate(
         amount: amount,
         memberUids: transactionMembers,
