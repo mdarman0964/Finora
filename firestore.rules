@@ -88,6 +88,170 @@ service cloud.firestore {
           && request.auth.uid in request.resource.data.memberUidsAtPosting
           && get(/databases/$(database)/documents/messes/$(messId)).data.memberUids.hasAll(request.resource.data.memberUidsAtPosting)
           && request.resource.data.transactionDate is timestamp
+          && request.resource.data.monthKey is string
+          && request.resource.data.monthKey.matches('^[0-9]{4}-(0[1-9]|1[0-2])
+          && request.resource.data.splitStrategy == get(/databases/$(database)/documents/messes/$(messId)).data.get('defaultSplitStrategy', 'equal')
+          && request.resource.data.mealEligible is bool;
+        allow update, delete: if false;
+      }
+
+      match /monthClosures/{monthKey} {
+        allow read: if isMessMember(messId);
+        allow create: if isMessOwner(messId)
+          && request.resource.data.monthKey == monthKey
+          && request.resource.data.closedBy == request.auth.uid
+          && request.resource.data.balanceSnapshot is map
+          && request.resource.data.totalMeals is int
+          && request.resource.data.mealEligibleExpenseMinor is int
+          && request.resource.data.incomeMinor is int
+          && request.resource.data.expenseMinor is int;
+        allow update, delete: if false;
+      }
+
+      match /meals/{mealId} {
+        allow read: if isMessMember(messId);
+        allow create, update: if isMessMember(messId)
+          && request.resource.data.memberUid == request.auth.uid
+          && request.resource.data.count is int
+          && request.resource.data.count >= 0
+          && request.resource.data.count <= 20
+          && request.resource.data.dateKey is string
+          && request.resource.data.dateKey.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])
+        allow delete: if false;
+      }
+    }
+  }
+}
+)
+          && !exists(/databases/$(database)/documents/messes/$(messId)/monthClosures/$(request.resource.data.monthKey))
+          && request.resource.data.status == 'posted'
+          && request.resource.data.splitStrategy == get(/databases/$(database)/documents/messes/$(messId)).data.get('defaultSplitStrategy', 'equal')
+          && request.resource.data.mealEligible is bool;
+        allow update, delete: if false;
+      }
+
+      match /monthClosures/{monthKey} {
+        allow read: if isMessMember(messId);
+        allow create: if isMessOwner(messId)
+          && request.resource.data.monthKey == monthKey
+          && request.resource.data.closedBy == request.auth.uid
+          && request.resource.data.balanceSnapshot is map
+          && request.resource.data.totalMeals is int
+          && request.resource.data.mealEligibleExpenseMinor is int
+          && request.resource.data.incomeMinor is int
+          && request.resource.data.expenseMinor is int;
+        allow update, delete: if false;
+      }
+
+      match /meals/{mealId} {
+        allow read: if isMessMember(messId);
+        allow create, update: if isMessMember(messId)
+          && request.resource.data.memberUid == request.auth.uid
+          && request.resource.data.count is int
+          && request.resource.data.count >= 0
+          && request.resource.data.count <= 20
+          && request.resource.data.dateKey is string
+          && mealId == request.auth.uid + '_' + request.resource.data.dateKey;
+        allow delete: if false;
+      }
+    }
+  }
+}
+)
+          && request.resource.data.monthKey is string
+          && request.resource.data.monthKey.matches('^[0-9]{4}-(0[1-9]|1[0-2])
+        allow delete: if false;
+      }
+    }
+  }
+}
+)
+          && !exists(/databases/$(database)/documents/messes/$(messId)/monthClosures/$(request.resource.data.monthKey))
+          && request.resource.data.status == 'posted'
+          && request.resource.data.splitStrategy == get(/databases/$(database)/documents/messes/$(messId)).data.get('defaultSplitStrategy', 'equal')
+          && request.resource.data.mealEligible is bool;
+        allow update, delete: if false;
+      }
+
+      match /monthClosures/{monthKey} {
+        allow read: if isMessMember(messId);
+        allow create: if isMessOwner(messId)
+          && request.resource.data.monthKey == monthKey
+          && request.resource.data.closedBy == request.auth.uid
+          && request.resource.data.balanceSnapshot is map
+          && request.resource.data.totalMeals is int
+          && request.resource.data.mealEligibleExpenseMinor is int
+          && request.resource.data.incomeMinor is int
+          && request.resource.data.expenseMinor is int;
+        allow update, delete: if false;
+      }
+
+      match /meals/{mealId} {
+        allow read: if isMessMember(messId);
+        allow create, update: if isMessMember(messId)
+          && request.resource.data.memberUid == request.auth.uid
+          && request.resource.data.count is int
+          && request.resource.data.count >= 0
+          && request.resource.data.count <= 20
+          && request.resource.data.dateKey is string
+          && mealId == request.auth.uid + '_' + request.resource.data.dateKey;
+        allow delete: if false;
+      }
+    }
+  }
+}
+)
+          && request.resource.data.dateKey.matches('^' + request.resource.data.monthKey + '-(0[1-9]|[12][0-9]|3[01])
+        allow delete: if false;
+      }
+    }
+  }
+}
+)
+          && !exists(/databases/$(database)/documents/messes/$(messId)/monthClosures/$(request.resource.data.monthKey))
+          && request.resource.data.status == 'posted'
+          && request.resource.data.splitStrategy == get(/databases/$(database)/documents/messes/$(messId)).data.get('defaultSplitStrategy', 'equal')
+          && request.resource.data.mealEligible is bool;
+        allow update, delete: if false;
+      }
+
+      match /monthClosures/{monthKey} {
+        allow read: if isMessMember(messId);
+        allow create: if isMessOwner(messId)
+          && request.resource.data.monthKey == monthKey
+          && request.resource.data.closedBy == request.auth.uid
+          && request.resource.data.balanceSnapshot is map
+          && request.resource.data.totalMeals is int
+          && request.resource.data.mealEligibleExpenseMinor is int
+          && request.resource.data.incomeMinor is int
+          && request.resource.data.expenseMinor is int;
+        allow update, delete: if false;
+      }
+
+      match /meals/{mealId} {
+        allow read: if isMessMember(messId);
+        allow create, update: if isMessMember(messId)
+          && request.resource.data.memberUid == request.auth.uid
+          && request.resource.data.count is int
+          && request.resource.data.count >= 0
+          && request.resource.data.count <= 20
+          && request.resource.data.dateKey is string
+          && mealId == request.auth.uid + '_' + request.resource.data.dateKey;
+        allow delete: if false;
+      }
+    }
+  }
+}
+)
+          && !exists(/databases/$(database)/documents/messes/$(messId)/monthClosures/$(request.resource.data.monthKey))
+          && mealId == request.auth.uid + '_' + request.resource.data.dateKey;
+        allow delete: if false;
+      }
+    }
+  }
+}
+)
+          && !exists(/databases/$(database)/documents/messes/$(messId)/monthClosures/$(request.resource.data.monthKey))
           && request.resource.data.status == 'posted'
           && request.resource.data.splitStrategy == get(/databases/$(database)/documents/messes/$(messId)).data.get('defaultSplitStrategy', 'equal')
           && request.resource.data.mealEligible is bool;

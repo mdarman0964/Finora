@@ -233,11 +233,18 @@ class AccountingService {
     final now = date ?? DateTime.now();
     final day = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     final uid = user.uid;
+    final key = monthKey(now);
+    final closure = await _db.collection('messes').doc(messId)
+        .collection('monthClosures').doc(key).get();
+    if (closure.exists) {
+      throw StateError('$key মাসের হিসাব বন্ধ। ওই মাসের মিল পরিবর্তন করা যাবে না।');
+    }
     await _db.collection('messes').doc(messId).collection('meals')
         .doc('${uid}_$day').set({
       'memberUid': uid,
       'memberName': user.displayName ?? user.email ?? 'Member',
       'dateKey': day,
+      'monthKey': key,
       'count': count,
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
@@ -277,6 +284,12 @@ class AccountingService {
     bool mealEligible = false,
   }) async {
     if (amountMinor <= 0) throw ArgumentError('টাকার পরিমাণ শূন্যের বেশি হতে হবে।');
+    final key = monthKey(transactionDate);
+    final closure = await _db.collection('messes').doc(messId)
+        .collection('monthClosures').doc(key).get();
+    if (closure.exists) {
+      throw StateError('$key মাসের হিসাব বন্ধ। ওই মাসে নতুন লেনদেন যোগ করা যাবে না।');
+    }
     final messSnapshot = await _db.collection('messes').doc(messId).get();
     final messData = messSnapshot.data();
     if (messData == null || !(messData['memberUids'] as List<dynamic>? ?? const []).contains(user.uid)) {
@@ -293,6 +306,7 @@ class AccountingService {
       'category': category.trim(),
       'description': description.trim(),
       'transactionDate': Timestamp.fromDate(transactionDate),
+      'monthKey': key,
       'paidByUid': user.uid,
       'createdBy': user.uid,
       'receiptStoragePath': receiptPath,
