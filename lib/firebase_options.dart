@@ -11,6 +11,7 @@ class FirebaseOptionsConfig {
   static const storageBucket = String.fromEnvironment('FIREBASE_STORAGE_BUCKET');
   static const authDomain = String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
   static const iosBundleId = String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID');
+  static const iosAppId = String.fromEnvironment('FIREBASE_IOS_APP_ID');
 
   static bool get isConfigured =>
       apiKey.isNotEmpty &&
@@ -37,7 +38,7 @@ class FirebaseOptionsConfig {
       case TargetPlatform.macOS:
         return FirebaseOptions(
           apiKey: apiKey,
-          appId: appId,
+          appId: iosAppId.isEmpty ? appId : iosAppId,
           messagingSenderId: messagingSenderId,
           projectId: projectId,
           storageBucket: storageBucket.isEmpty ? null : storageBucket,
