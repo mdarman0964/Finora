@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'firebase_options.dart';
 import 'services/accounting_service.dart';
 import 'services/balance_calculator.dart';
+import 'services/settlement_calculator.dart';
 import 'services/report_service.dart';
 
 void main() {
@@ -861,42 +862,86 @@ class MemberBalancesPage extends StatelessWidget {
                 ).entries.toList()
                   ..sort((a, b) => b.value.compareTo(a.value));
                 final money = NumberFormat.currency(locale: 'en_BD', symbol: '৳', decimalDigits: 2);
-                return ListView(
-                  padding: const EdgeInsets.all(18),
-                  children: [
-                    Text('সদস্যভিত্তিক ব্যালেন্স', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 6),
-                    Text(mess['name'] as String? ?? 'তোমার মেস'),
-                    const SizedBox(height: 12),
-                    const Card(child: ListTile(
-                      leading: Icon(Icons.info_outline),
-                      title: Text('ব্যালেন্স কীভাবে পড়বেন?'),
-                      subtitle: Text('ইতিবাচক ব্যালেন্স = সদস্য টাকা পাবে। ঋণাত্মক ব্যালেন্স = সদস্যের টাকা দিতে হবে। হিসাব জমা, খরচ, নির্বাচিত ভাগের নিয়ম ও মিলের এন্ট্রি থেকে তৈরি হয়।'),
-                    )),
-                    const SizedBox(height: 8),
-                    if (balances.isEmpty)
-                      const Card(child: Padding(
-                        padding: EdgeInsets.all(18),
-                        child: Text('এখনও কোনো সদস্য বা হিসাব পাওয়া যায়নি।'),
-                      )),
-                    for (final entry in balances)
-                      Card(
-                        child: ListTile(
-                          leading: CircleAvatar(child: Text(entry.key.substring(entry.key.length > 2 ? entry.key.length - 2 : 0).toUpperCase())),
-                          title: Text('সদস্য • ${entry.key.length > 8 ? entry.key.substring(0, 8) : entry.key}'),
-                          subtitle: Text(entry.value > 0 ? 'পাবেন' : entry.value < 0 ? 'দিতে হবে' : 'হিসাব সমান'),
-                          trailing: Text(
-                            money.format(entry.value / 100),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: entry.value > 0 ? Colors.green : entry.value < 0 ? Theme.of(context).colorScheme.error : null,
+                return FutureBuilder<Map<String, Map<String, dynamic>>>(
+                  future: service.getMemberProfiles(memberUids),
+                  builder: (context, profileSnapshot) {
+                    final profiles = profileSnapshot.data ?? const <String, Map<String, dynamic>>{};
+                    final settlements = SettlementCalculator.calculate(Map.fromEntries(balances));
+                    final totalBalance = balances.fold<int>(0, (sum, entry) => sum + entry.value);
+                    String memberLabel(String uid) {
+                      final profile = profiles[uid] ?? const <String, dynamic>{};
+                      final name = (profile['displayName'] as String? ?? '').trim();
+                      final email = (profile['email'] as String? ?? '').trim();
+                      if (name.isNotEmpty && name != email) return name;
+                      if (email.isNotEmpty) return email;
+                      return 'সদস্য • ${uid.length > 8 ? uid.substring(0, 8) : uid}';
+                    }
+
+                    return ListView(
+                      padding: const EdgeInsets.all(18),
+                      children: [
+                        Text('সদস্যভিত্তিক ব্যালেন্স', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 6),
+                        Text(mess['name'] as String? ?? 'তোমার মেস'),
+                        const SizedBox(height: 12),
+                        const Card(child: ListTile(
+                          leading: Icon(Icons.info_outline),
+                          title: Text('ব্যালেন্স কীভাবে পড়বেন?'),
+                          subtitle: Text('ইতিবাচক ব্যালেন্স = সদস্য টাকা পাবে। ঋণাত্মক ব্যালেন্স = সদস্যের টাকা দিতে হবে। হিসাব জমা, খরচ, নির্বাচিত ভাগের নিয়ম ও মিলের এন্ট্রি থেকে তৈরি হয়।'),
+                        )),
+                        const SizedBox(height: 8),
+                        if (profileSnapshot.connectionState == ConnectionState.waiting)
+                          const LinearProgressIndicator(),
+                        if (balances.isEmpty)
+                          const Card(child: Padding(
+                            padding: EdgeInsets.all(18),
+                            child: Text('এখনও কোনো সদস্য বা হিসাব পাওয়া যায়নি।'),
+                          )),
+                        for (final entry in balances)
+                          Card(
+                            child: ListTile(
+                              leading: CircleAvatar(child: Text(memberLabel(entry.key).trim().isNotEmpty
+                                  ? memberLabel(entry.key).trim().characters.first.toUpperCase()
+                                  : '?')),
+                              title: Text(memberLabel(entry.key)),
+                              subtitle: Text(entry.value > 0 ? 'পাবেন' : entry.value < 0 ? 'দিতে হবে' : 'হিসাব সমান'),
+                              trailing: Text(
+                                money.format(entry.value / 100),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: entry.value > 0 ? Colors.green : entry.value < 0 ? Theme.of(context).colorScheme.error : null,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    const Text('নোট: সদস্যের নামের বদলে আপাতত পরিচয় কোড দেখানো হচ্ছে। ব্যালেন্স প্রাথমিক হিসাব; মাস বন্ধ/সমন্বয়ের আগে সদস্যদের এন্ট্রি যাচাই করুন.'),
-                  ],
+                        const SizedBox(height: 12),
+                        Text('টাকা সমন্বয়ের পরামর্শ', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        if (totalBalance != 0)
+                          Card(child: ListTile(
+                            leading: const Icon(Icons.account_balance_wallet_outlined),
+                            title: const Text('এখনই চূড়ান্ত লেনদেনের পরামর্শ দেওয়া যাচ্ছে না'),
+                            subtitle: Text('সদস্যদের ব্যালেন্সের মোট ${money.format(totalBalance / 100)}। মেসের তহবিলে অবশিষ্ট টাকা বা অনিবন্ধিত হিসাব থাকতে পারে। আগে তহবিল/হিসাব মিলিয়ে নিন।'),
+                          ))
+                        else if (settlements.isEmpty)
+                          const Card(child: ListTile(
+                            leading: Icon(Icons.check_circle_outline),
+                            title: Text('সবার হিসাব সমান'),
+                            subtitle: Text('এখন কোনো টাকা আদান-প্রদানের প্রয়োজন নেই।'),
+                          ))
+                        else
+                          for (final transfer in settlements)
+                            Card(child: ListTile(
+                              leading: const Icon(Icons.swap_horiz),
+                              title: Text('${memberLabel(transfer.fromUid)} → ${memberLabel(transfer.toUid)}'),
+                              subtitle: const Text('টাকা দেবেন → টাকা পাবেন'),
+                              trailing: Text(money.format(transfer.amountMinor / 100), style: const TextStyle(fontWeight: FontWeight.bold)),
+                            )),
+                        const SizedBox(height: 8),
+                        const Text('নোট: ব্যালেন্স ও সমন্বয়ের পরামর্শ প্রাথমিক হিসাব। সদস্যদের এন্ট্রি এবং মেসের হাতে থাকা নগদ মিলিয়ে তারপর টাকা পরিশোধ করুন।'),
+                      ],
+                    );
+                  },
                 );
               },
             );
