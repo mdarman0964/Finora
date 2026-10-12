@@ -288,6 +288,7 @@ class _DashboardPageState extends State<DashboardPage> {
             children: [
               _OverviewPage(userName: user.displayName ?? 'সদস্য', messId: messId),
               LedgerPage(messId: messId, service: _service),
+              MealsPage(messId: messId, service: _service),
               LoansPage(service: _service),
               ReportsPage(messId: messId),
             ],
@@ -308,6 +309,7 @@ class _DashboardPageState extends State<DashboardPage> {
             destinations: const [
               NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'হোম'),
               NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'হিসাব'),
+              NavigationDestination(icon: Icon(Icons.restaurant_outlined), selectedIcon: Icon(Icons.restaurant), label: 'মিল'),
               NavigationDestination(icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake), label: 'ধার-দেনা'),
               NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'রিপোর্ট'),
             ],
@@ -407,6 +409,35 @@ class MessSummaryCard extends StatelessWidget {
   const MessSummaryCard({super.key, required this.messId});
   final String messId;
 
+  Future<void> _editSplitRule(BuildContext context, String current) async {
+    var selected = current;
+    await showDialog<void>(context: context, builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('খরচ ভাগের নিয়ম'),
+        content: DropdownButtonFormField<String>(
+          initialValue: selected,
+          items: const [
+            DropdownMenuItem(value: 'equal', child: Text('সব সদস্যের মধ্যে সমান ভাগ')),
+            DropdownMenuItem(value: 'meals', child: Text('মিলের সংখ্যার অনুপাতে')),
+            DropdownMenuItem(value: 'payer', child: Text('যিনি খরচ করেছেন তাঁর হিসাবে')),
+          ],
+          onChanged: (value) => setDialogState(() => selected = value ?? 'equal'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('বাতিল')),
+          FilledButton(onPressed: () async {
+            try {
+              await AccountingService().updateDefaultSplitStrategy(messId, selected);
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            } catch (e) {
+              if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.toString())));
+            }
+          }, child: const Text('সংরক্ষণ')),
+        ],
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) => StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: AccountingService().messStream(messId),
@@ -423,12 +454,24 @@ class MessSummaryCard extends StatelessWidget {
                 const Text('সদস্যদের আমন্ত্রণ জানাতে এই কোড শেয়ার করো:'),
                 SelectableText(data?['inviteCode'] as String? ?? 'লোড হচ্ছে…',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                if (data?['ownerUid'] == FirebaseAuth.instance.currentUser?.uid)
+                  Align(alignment: Alignment.centerLeft, child: TextButton.icon(
+                    onPressed: () => _editSplitRule(context, data?['defaultSplitStrategy'] as String? ?? 'equal'),
+                    icon: const Icon(Icons.tune), label: const Text('খরচ ভাগের নিয়ম নির্ধারণ'),
+                  )),
+                Text('বর্তমান নিয়ম: ${_splitLabel(data?['defaultSplitStrategy'] as String? ?? 'equal')}'),
               ]),
             ),
           );
         },
       );
 }
+
+String _splitLabel(String value) => switch (value) {
+  'meals' => 'মিলের অনুপাতে',
+  'payer' => 'খরচকারীর হিসাবে',
+  _ => 'সমান ভাগ',
+};
 
 class LedgerPage extends StatefulWidget {
   const LedgerPage({super.key, required this.messId, required this.service});
@@ -539,6 +582,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   bool _busy = false;
   File? _receipt;
   String? _error;
+  bool _mealEligible = false;
 
   Future<void> _pickReceipt() async {
     final image = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
@@ -583,6 +627,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
           description: _description.text,
           transactionDate: DateTime.now(),
           receiptPath: receiptPath,
+          mealEligible: _mealEligible,
         );
       }
       if (mounted) Navigator.pop(context);
@@ -622,6 +667,14 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
             TextField(controller: _category, decoration: const InputDecoration(labelText: 'ক্যাটাগরি', border: OutlineInputBorder())),
             const SizedBox(height: 10),
             TextField(controller: _description, decoration: const InputDecoration(labelText: 'বিবরণ (ঐচ্ছিক)', border: OutlineInputBorder())),
+            if (!_personal && (_kind == 'messExpense' || _kind == 'memberPaidExpense'))
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _mealEligible,
+                onChanged: (value) => setState(() => _mealEligible = value ?? false),
+                title: const Text('মিলের রেটের হিসাবে ধরুন'),
+                subtitle: const Text('খাবার/বাজারের যোগ্য খরচ হলে টিক দিন'),
+              ),
             const SizedBox(height: 8),
             OutlinedButton.icon(onPressed: _busy ? null : _pickReceipt,
               icon: const Icon(Icons.add_a_photo_outlined),
@@ -634,6 +687,108 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
           FilledButton(onPressed: _busy ? null : _save, child: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator()) : const Text('সংরক্ষণ')),
         ],
       );
+}
+
+class MealsPage extends StatefulWidget {
+  const MealsPage({super.key, required this.messId, required this.service});
+  final String? messId;
+  final AccountingService service;
+  @override
+  State<MealsPage> createState() => _MealsPageState();
+}
+
+class _MealsPageState extends State<MealsPage> {
+  final _count = TextEditingController(text: '3');
+  bool _saving = false;
+  String? _message;
+  String _monthKey(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}';
+  String _dayKey(DateTime date) => '${_monthKey(date)}-${date.day.toString().padLeft(2, '0')}';
+
+  Future<void> _save() async {
+    final count = int.tryParse(_count.text.trim());
+    if (count == null || count < 0 || count > 20) {
+      setState(() => _message = 'মিলের সংখ্যা ০ থেকে ২০-এর মধ্যে দিন.');
+      return;
+    }
+    if (widget.messId == null) {
+      setState(() => _message = 'আগে মেস তৈরি করুন অথবা মেসে যোগ দিন।');
+      return;
+    }
+    setState(() { _saving = true; _message = null; });
+    try {
+      await widget.service.addMealCount(messId: widget.messId!, count: count);
+      if (mounted) setState(() => _message = 'আজকের মিলের হিসাব সংরক্ষণ হয়েছে।');
+    } catch (e) {
+      if (mounted) setState(() => _message = e.toString());
+    } finally { if (mounted) setState(() => _saving = false); }
+  }
+
+  @override
+  void dispose() { _count.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.messId == null) return const Center(child: Padding(
+      padding: EdgeInsets.all(24), child: Text('মিলের হিসাব রাখতে আগে মেস তৈরি করুন বা যোগ দিন.', textAlign: TextAlign.center),
+    ));
+    final now = DateTime.now();
+    final month = _monthKey(now);
+    final today = _dayKey(now);
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: widget.service.mealCounts(widget.messId!),
+      builder: (context, mealSnapshot) {
+        final meals = mealSnapshot.data?.docs ?? [];
+        final monthMeals = meals.where((d) => (d.data()['dateKey'] as String? ?? '').startsWith(month)).toList();
+        final totalMeals = monthMeals.fold<int>(0, (sum, d) => sum + ((d.data()['count'] as num?)?.toInt() ?? 0));
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        final todayDoc = meals.where((d) => d.data()['memberUid'] == uid && d.data()['dateKey'] == today).toList();
+        if (todayDoc.isNotEmpty) _count.text = '${todayDoc.first.data()['count'] ?? 0}';
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: widget.service.messTransactions(widget.messId!),
+          builder: (context, transactionSnapshot) {
+            final eligibleMinor = (transactionSnapshot.data?.docs ?? []).fold<int>(0, (sum, doc) {
+              final data = doc.data(); final date = data['transactionDate']; final kind = data['kind'];
+              if (data['mealEligible'] == true && (kind == 'messExpense' || kind == 'memberPaidExpense') && date is Timestamp && _monthKey(date.toDate()) == month) {
+                return sum + ((data['amountMinor'] as num?)?.toInt() ?? 0);
+              }
+              return sum;
+            });
+            final rate = totalMeals == 0 ? 0.0 : eligibleMinor / 100 / totalMeals;
+            return ListView(padding: const EdgeInsets.all(18), children: [
+              Text('মিল ও মিল রেট', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6), Text('${DateFormat('MMMM yyyy').format(now)} • মাসিক হিসাব'),
+              const SizedBox(height: 14),
+              Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('আজকের মিল', style: Theme.of(context).textTheme.titleMedium), const SizedBox(height: 8),
+                TextField(controller: _count, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'আজ কতটি মিল খেয়েছেন?', border: OutlineInputBorder())),
+                const SizedBox(height: 10),
+                FilledButton(onPressed: _saving ? null : _save, child: _saving ? const CircularProgressIndicator() : const Text('মিল সংরক্ষণ করুন')),
+                if (_message != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_message!)),
+              ]))),
+              const SizedBox(height: 12),
+              GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 2, childAspectRatio: 1.45, crossAxisSpacing: 10, mainAxisSpacing: 10, children: [
+                _MetricCard(label: 'মোট মিল', value: '$totalMeals', icon: Icons.restaurant),
+                _MetricCard(label: 'যোগ্য খাবার খরচ', value: '৳${(eligibleMinor / 100).toStringAsFixed(2)}', icon: Icons.shopping_basket_outlined),
+                _MetricCard(label: 'প্রতি মিল রেট', value: '৳${rate.toStringAsFixed(2)}', icon: Icons.calculate_outlined),
+                _MetricCard(label: 'এই মাসে সদস্য এন্ট্রি', value: '${monthMeals.length}', icon: Icons.groups_outlined),
+              ]),
+              const SizedBox(height: 12),
+              const Card(child: ListTile(leading: Icon(Icons.info_outline), title: Text('মিল রেটের নিয়ম'), subtitle: Text('এই মাসের মিলের হিসাবে চিহ্নিত খাবার-সংক্রান্ত মেস খরচ ÷ এই মাসের মোট মিল। অন্য খরচ এখানে ধরা হয় না.'))),
+            ]);
+          },
+        );
+      },
+    );
+  }
+}
+
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({required this.label, required this.value, required this.icon});
+  final String label; final String value; final IconData icon;
+  @override
+  Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+    Icon(icon), const SizedBox(height: 8), Text(label, maxLines: 2, overflow: TextOverflow.ellipsis), const SizedBox(height: 4), Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+  ])));
 }
 
 class LoansPage extends StatefulWidget {
@@ -763,6 +918,7 @@ class _ReportsPageState extends State<ReportsPage> {
   bool _personal = false;
   bool _busy = false;
   String? _message;
+  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   final _reports = ReportService();
 
   Future<List<Map<String, dynamic>>> _fetchRows() async {
@@ -774,7 +930,12 @@ class _ReportsPageState extends State<ReportsPage> {
             : FirebaseFirestore.instance.collection('messes').doc(widget.messId).collection('transactions');
     if (query == null) return [];
     final result = await query.orderBy('transactionDate', descending: true).get();
-    return result.docs.map((doc) => doc.data()).toList();
+    return result.docs.map((doc) => doc.data()).where((row) {
+      final date = row['transactionDate'];
+      if (date is! Timestamp) return false;
+      final value = date.toDate();
+      return value.year == _selectedMonth.year && value.month == _selectedMonth.month;
+    }).toList();
   }
 
   Future<void> _export(bool excel) async {
@@ -782,7 +943,8 @@ class _ReportsPageState extends State<ReportsPage> {
     try {
       final rows = await _fetchRows();
       if (rows.isEmpty) throw StateError('রিপোর্টে কোনো হিসাব নেই।');
-      final title = _personal ? 'personal-finance-report' : 'mess-ledger-report';
+      final monthSuffix = '${_selectedMonth.year}-${_selectedMonth.month.toString().padLeft(2, '0')}';
+      final title = '${_personal ? 'personal-finance-report' : 'mess-ledger-report'}-$monthSuffix';
       final file = excel
           ? await _reports.exportExcel(rows, title: title)
           : await _reports.exportPdf(rows, title: title);
@@ -810,6 +972,17 @@ class _ReportsPageState extends State<ReportsPage> {
             ],
             selected: {_personal},
             onSelectionChanged: (values) => setState(() => _personal = values.first),
+          ),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<DateTime>(
+            initialValue: _selectedMonth,
+            decoration: const InputDecoration(labelText: 'রিপোর্টের মাস', border: OutlineInputBorder()),
+            items: List.generate(12, (index) {
+              final now = DateTime.now();
+              final month = DateTime(now.year, now.month - index);
+              return DropdownMenuItem(value: month, child: Text(DateFormat('MMMM yyyy').format(month)));
+            }),
+            onChanged: _busy ? null : (value) { if (value != null) setState(() => _selectedMonth = value); },
           ),
           const SizedBox(height: 14),
           FilledButton.icon(onPressed: _busy ? null : () => _export(false), icon: const Icon(Icons.picture_as_pdf), label: const Text('PDF তৈরি করুন')),
