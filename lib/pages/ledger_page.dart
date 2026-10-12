@@ -86,14 +86,14 @@ class _LedgerPageState extends State<LedgerPage> {
               final path = data['receiptStoragePath'] as String?;
               if (path == null || path.isEmpty) return;
               try {
-                final url = await widget.service.receiptUrl(path);
+                final bytes = await widget.service.receiptBytes(path);
                 if (context.mounted) {
                   showDialog<void>(
                     context: context,
                     builder: (dialogContext) => AlertDialog(
                       title: const Text('রসিদের ছবি'),
-                      content: Image.network(url, errorBuilder: (_, __, ___) =>
-                          SelectableText(url)),
+                      content: Image.memory(bytes, errorBuilder: (_, __, ___) =>
+                          const Text('ছবিটি দেখানো যাচ্ছে না।')),
                       actions: [TextButton(
                         onPressed: () => Navigator.pop(dialogContext),
                         child: const Text('বন্ধ করুন'),
