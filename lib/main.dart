@@ -863,7 +863,7 @@ class MemberBalancesPage extends StatelessWidget {
                   ..sort((a, b) => b.value.compareTo(a.value));
                 final money = NumberFormat.currency(locale: 'en_BD', symbol: '৳', decimalDigits: 2);
                 return FutureBuilder<Map<String, Map<String, dynamic>>>(
-                  future: service.getMemberProfiles(memberUids),
+                  future: service.getMemberProfiles(messId!, memberUids),
                   builder: (context, profileSnapshot) {
                     final profiles = profileSnapshot.data ?? const <String, Map<String, dynamic>>{};
                     final settlements = SettlementCalculator.calculate(Map.fromEntries(balances));
