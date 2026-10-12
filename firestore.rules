@@ -81,6 +81,9 @@ service cloud.firestore {
           && request.resource.data.amountMinor is int
           && request.resource.data.amountMinor > 0
           && request.resource.data.kind in ['deposit', 'messExpense', 'memberPaidExpense']
+          && request.resource.data.memberUidsAtPosting is list
+          && request.auth.uid in request.resource.data.memberUidsAtPosting
+          && get(/databases/$(database)/documents/messes/$(messId)).data.memberUids.hasAll(request.resource.data.memberUidsAtPosting)
           && request.resource.data.transactionDate is timestamp
           && request.resource.data.status == 'posted'
           && request.resource.data.splitStrategy == get(/databases/$(database)/documents/messes/$(messId)).data.get('defaultSplitStrategy', 'equal')
