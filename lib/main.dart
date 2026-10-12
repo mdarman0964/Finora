@@ -552,6 +552,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
       if (_receipt != null) {
         receiptPath = await widget.service.uploadReceipt(
           _receipt!, scope: _personal ? 'personal' : 'mess',
+          messId: _personal ? null : widget.messId,
         );
       }
       final minor = (amount * 100).round();
@@ -595,10 +596,10 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
               contentPadding: EdgeInsets.zero,
               title: const Text('ব্যক্তিগত হিসাব'),
               value: _personal,
-              onChanged: (value) => setState(() { _personal = value; _kind = 'messExpense'; }),
+              onChanged: (value) => setState(() { _personal = value; _kind = value ? 'expense' : 'messExpense'; }),
             ),
             DropdownButtonFormField<String>(
-              value: _kind,
+              initialValue: _kind,
               decoration: const InputDecoration(labelText: 'ধরন'),
               items: (_personal
                   ? const {'expense': 'ব্যক্তিগত খরচ', 'deposit': 'ব্যক্তিগত আয়'}
@@ -646,7 +647,7 @@ class _LoansPageState extends State<LoansPage> {
           TextField(controller: name, decoration: const InputDecoration(labelText: 'ব্যক্তির নাম')),
           TextField(controller: amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'টাকার পরিমাণ')),
           DropdownButtonFormField<String>(
-            value: direction,
+            initialValue: direction,
             items: const [
               DropdownMenuItem(value: 'lent', child: Text('আমি ধার দিয়েছি')),
               DropdownMenuItem(value: 'borrowed', child: Text('আমি ধার নিয়েছি')),
