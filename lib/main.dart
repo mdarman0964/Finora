@@ -741,7 +741,7 @@ class _MealsPageState extends State<MealsPage> {
     setState(() { _saving = true; _message = null; });
     try {
       await widget.service.addMealCount(messId: widget.messId!, count: count);
-      if (mounted) setState(() => _message = 'আজকের মিলের হিসাব সংরক্ষণ হয়েছে।');
+      if (mounted) { setState(() => _message = 'আজকের মিলের হিসাব সংরক্ষণ হয়েছে।'); }
     } catch (e) {
       if (mounted) setState(() => _message = e.toString());
     } finally { if (mounted) { setState(() => _saving = false); } }
@@ -778,7 +778,7 @@ class _MealsPageState extends State<MealsPage> {
               if (data['mealEligible'] == true && (kind == 'messExpense' || kind == 'memberPaidExpense') && date is Timestamp && _monthKey(date.toDate()) == month) {
                 return total + ((data['amountMinor'] as num?)?.toInt() ?? 0);
               }
-              return sum;
+              return total;
             });
             final rate = totalMeals == 0 ? 0.0 : eligibleMinor / 100 / totalMeals;
             return ListView(padding: const EdgeInsets.all(18), children: [
