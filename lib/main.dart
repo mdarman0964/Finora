@@ -901,7 +901,7 @@ class MemberBalancesPage extends StatelessWidget {
                           Card(
                             child: ListTile(
                               leading: CircleAvatar(child: Text(memberLabel(entry.key).trim().isNotEmpty
-                                  ? memberLabel(entry.key).trim().characters.first.toUpperCase()
+                                  ? memberLabel(entry.key).trim().substring(0, 1).toUpperCase()
                                   : '?')),
                               title: Text(memberLabel(entry.key)),
                               subtitle: Text(entry.value > 0 ? 'পাবেন' : entry.value < 0 ? 'দিতে হবে' : 'হিসাব সমান'),
