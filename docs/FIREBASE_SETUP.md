@@ -52,11 +52,11 @@ For a local build, provide the same `--dart-define` values to `flutter build apk
 - Loans and repayment events are stored under the signed-in user's private path.
 - Daily per-member meal counts are stored under each mess; the same member can update their count for a given day.
 - Food-related expenses can be explicitly marked as meal-rate eligible. Monthly meal rate is eligible food expense divided by total counted meals.
-- Mess owners can choose the default strategy used on new expense records: equal, meal-count-based, or payer-accounted.
+- Mess owners can choose the default strategy used on new expense records: equal, meal-count-based, or payer-accounted. Mess expenses start pending and are included in balances only after owner approval; owners can also assign fixed member amounts or percentage-based shares.
 - The signed-in member's shared display profile is backfilled when the member-balance view loads. Other members' private user documents are never read for names.
 - A mess owner can close a month once. The closure stores a month-keyed cumulative member-balance snapshot and month totals; the balance view starts from the latest closure and adds transactions dated after that closed month.
 - Firestore rules make month closures read-only after creation and prevent transaction edits/deletes through the current client. Deploy and test these rules before production use.
-- Reports can be filtered by month before PDF/XLSX export. The current PDF font has not yet been verified for Bengali glyph coverage.
+- Reports can be filtered by month before PDF/XLSX export. PDF exports embed Noto Sans Bengali for Bengali labels and descriptions.
 - PDF and XLSX exports are generated on-device and shared using the platform share sheet.
 - The iOS workflow validates an unsigned iOS build on macOS. An unsigned build is not ready for TestFlight/App Store distribution; signing and Apple developer configuration are still required.
 - Personal finance is private by default. Do not add personal transaction data to shared mess collections.

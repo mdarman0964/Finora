@@ -130,6 +130,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   File? _receipt;
   String? _error;
   bool _mealEligible = false;
+  bool _isMessOwner = false;
   String _splitStrategy = 'equal';
   Future<List<Map<String, String>>>? _membersFuture;
   final Map<String, TextEditingController> _allocationControllers = {};
@@ -137,6 +138,9 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   void initState() { super.initState(); if (widget.messId != null) _membersFuture = _loadMembers(); }
   Future<List<Map<String, String>>> _loadMembers() async {
     final snapshot = await FirebaseFirestore.instance.collection('messes').doc(widget.messId).get();
+    final configuredSplit = snapshot.data()?['defaultSplitStrategy'] as String?;
+    final owner = await widget.service.isMessOwner(widget.messId!);
+    if (mounted) setState(() { _isMessOwner = owner; if (configuredSplit != null && {'equal', 'meals', 'payer'}.contains(configuredSplit)) _splitStrategy = configuredSplit; });
     final uids = (snapshot.data()?['memberUids'] as List<dynamic>? ?? const []).whereType<String>().toList()..sort();
     final profiles = await widget.service.getMemberProfiles(widget.messId!, uids);
     return uids.map((uid) { final name = (profiles[uid]?['displayName'] as String? ?? '').trim(); return {'uid': uid, 'name': name.isEmpty ? uid : name}; }).toList();
@@ -187,7 +191,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
           transactionDate: DateTime.now(),
           receiptPath: receiptPath,
           mealEligible: _mealEligible,
-          splitStrategy: _splitStrategy,
+          splitStrategy: (_kind == 'messExpense' || _kind == 'memberPaidExpense') ? _splitStrategy : null,
           allocations: allocations,
           splitWeights: splitWeights,
         );
@@ -227,7 +231,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(initialValue: _splitStrategy, decoration: const InputDecoration(labelText: 'খরচ ভাগের নিয়ম', border: OutlineInputBorder()), items: const [
                 DropdownMenuItem(value: 'equal', child: Text('সমান ভাগ')), DropdownMenuItem(value: 'meals', child: Text('মিল অনুযায়ী')), DropdownMenuItem(value: 'payer', child: Text('যিনি দিয়েছেন')),
-                DropdownMenuItem(value: 'fixed', child: Text('সদস্যভিত্তিক নির্দিষ্ট টাকা (ম্যানেজার)')), DropdownMenuItem(value: 'percentage', child: Text('সদস্যভিত্তিক শতাংশ (ম্যানেজার)')),
+                DropdownMenuItem(enabled: _isMessOwner, value: 'fixed', child: Text('সদস্যভিত্তিক নির্দিষ্ট টাকা (ম্যানেজার)')), DropdownMenuItem(enabled: _isMessOwner, value: 'percentage', child: Text('সদস্যভিত্তিক শতাংশ (ম্যানেজার)')),
               ], onChanged: _busy ? null : (value) => setState(() => _splitStrategy = value ?? 'equal')),
               if (_splitStrategy == 'fixed' || _splitStrategy == 'percentage') FutureBuilder<List<Map<String, String>>>(future: _membersFuture, builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator());
