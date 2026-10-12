@@ -230,8 +230,8 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
             if (!_personal && (_kind == 'messExpense' || _kind == 'memberPaidExpense')) ...[
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(initialValue: _splitStrategy, decoration: const InputDecoration(labelText: 'খরচ ভাগের নিয়ম', border: OutlineInputBorder()), items: [
-                DropdownMenuItem(value: 'equal', child: Text('সমান ভাগ')), DropdownMenuItem(value: 'meals', child: Text('মিল অনুযায়ী')), DropdownMenuItem(value: 'payer', child: Text('যিনি দিয়েছেন')),
-                DropdownMenuItem(enabled: _isMessOwner, value: 'fixed', child: Text('সদস্যভিত্তিক নির্দিষ্ট টাকা (ম্যানেজার)')), DropdownMenuItem(enabled: _isMessOwner, value: 'percentage', child: Text('সদস্যভিত্তিক শতাংশ (ম্যানেজার)')),
+                const DropdownMenuItem(value: 'equal', child: const Text('সমান ভাগ')), const DropdownMenuItem(value: 'meals', child: const Text('মিল অনুযায়ী')), const DropdownMenuItem(value: 'payer', child: const Text('যিনি দিয়েছেন')),
+                DropdownMenuItem(enabled: _isMessOwner, value: 'fixed', child: const Text('সদস্যভিত্তিক নির্দিষ্ট টাকা (ম্যানেজার)')), DropdownMenuItem(enabled: _isMessOwner, value: 'percentage', child: const Text('সদস্যভিত্তিক শতাংশ (ম্যানেজার)')),
               ], onChanged: _busy ? null : (value) => setState(() => _splitStrategy = value ?? 'equal')),
               if (_splitStrategy == 'fixed' || _splitStrategy == 'percentage') FutureBuilder<List<Map<String, String>>>(future: _membersFuture, builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator());
