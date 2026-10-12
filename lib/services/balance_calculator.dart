@@ -14,6 +14,10 @@ class BalanceCalculator {
     for (final row in transactions) {
       final payer = row['paidByUid'];
       if (payer is String && payer.isNotEmpty) members.add(payer);
+      final historicalMembers = row['memberUidsAtPosting'];
+      if (historicalMembers is List) {
+        members.addAll(historicalMembers.whereType<String>().where((uid) => uid.isNotEmpty));
+      }
     }
     final balances = {for (final uid in members) uid: 0};
 
@@ -36,9 +40,13 @@ class BalanceCalculator {
       }
 
       final strategy = row['splitStrategy'] as String? ?? 'equal';
+      final historicalMembers = row['memberUidsAtPosting'];
+      final transactionMembers = historicalMembers is List
+          ? historicalMembers.whereType<String>().where((uid) => uid.isNotEmpty).toSet().toList()..sort()
+          : members.toList()..sort();
       final allocations = _allocate(
         amount: amount,
-        memberUids: members.toList()..sort(),
+        memberUids: transactionMembers,
         strategy: strategy,
         payerUid: payer,
         monthMeals: _mealWeightsFor(row['transactionDate'], meals),
