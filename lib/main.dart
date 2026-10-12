@@ -743,7 +743,9 @@ class _MealsPageState extends State<MealsPage> {
       await widget.service.addMealCount(messId: widget.messId!, count: count);
       if (mounted) { setState(() => _message = 'আজকের মিলের হিসাব সংরক্ষণ হয়েছে।'); }
     } catch (e) {
-      if (mounted) setState(() => _message = e.toString());
+      if (mounted) {
+        setState(() => _message = e.toString());
+      }
     } finally { if (mounted) { setState(() => _saving = false); } }
   }
 
