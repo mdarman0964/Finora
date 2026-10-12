@@ -1,0 +1,28 @@
+{
+  "project_info": {
+    "project_number": "581245623940",
+    "project_id": "finora-216da",
+    "storage_bucket": "finora-216da.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:581245623940:android:86a4a7d3ad68e32a956cd1",
+        "android_client_info": {
+          "package_name": "com.finora.finora"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1UZtCMGzKBxVHMYx9Mie5ZnDm9_7-12s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
