@@ -27,3 +27,10 @@ This is a draft, not a production schema. Enforce authorization in Firestore rul
 ## Month closure protection
 
 New mess transaction documents include `monthKey` in `YYYY-MM` format, and meal documents include both `dateKey` (`YYYY-MM-DD`) and `monthKey`. Firestore rules reject writes when a matching `monthClosures/{monthKey}` document exists. The accounting service also checks the closure before writing to show a clear Bengali error message; the server rules remain the enforcement boundary.
+
+
+## Approval and custom split behaviour
+
+Mess expenses (`messExpense` and `memberPaidExpense`) are created with `status: pending` and are excluded from balances until the mess owner approves them. Owner approval changes status to `posted`; rejection changes it to `rejected`. Deposits remain posted immediately. Supported split strategies are equal, meals, payer, fixed member allocations, and percentage weights in basis points (10000 = 100%). Fixed allocations are stored in minor currency units and must sum to the transaction amount; percentage weights must sum to 10000. Custom fixed/percentage splits are restricted to the mess owner by the service and Firestore rules.
+
+PDF exports embed Noto Sans Bengali for offline Bengali labels and descriptions. The font is licensed under the SIL Open Font License; the license file is included next to the font.
