@@ -17,8 +17,7 @@ class FirebaseOptionsConfig {
     final commonValuesPresent = apiKey.isNotEmpty &&
         appId.isNotEmpty &&
         messagingSenderId.isNotEmpty &&
-        projectId.isNotEmpty &&
-        storageBucket.isNotEmpty;
+        projectId.isNotEmpty;
     if (!commonValuesPresent) return false;
     if (defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS) {
