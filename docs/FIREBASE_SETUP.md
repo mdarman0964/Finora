@@ -18,7 +18,7 @@ In GitHub, open **Settings → Secrets and variables → Actions → New reposit
 - `FIREBASE_APP_ID`
 - `FIREBASE_MESSAGING_SENDER_ID`
 - `FIREBASE_PROJECT_ID`
-- `FIREBASE_STORAGE_BUCKET` (recommended for receipts)
+- `FIREBASE_STORAGE_BUCKET` (required for receipt uploads)
 - `FIREBASE_IOS_APP_ID` (optional; use the iOS app ID when preparing an iOS build)
 
 Optional for web builds: `FIREBASE_AUTH_DOMAIN`. For iOS, set `FIREBASE_IOS_BUNDLE_ID` and register the iOS app in Firebase.
