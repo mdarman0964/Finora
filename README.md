@@ -1,4 +1,4 @@
-# HisabKhata Mess Manager
+# Finora
 
 Flutter app for shared mess accounting and private personal finance tracking.
 
@@ -22,7 +22,7 @@ No Firebase project credentials or admin keys are committed. Without the require
 
 ## Build APK
 
-The workflow `.github/workflows/android-apk.yml` runs on pushes to `main` and can be started from **Actions → Build Android APK → Run workflow**. Download `hisabkhata-mess-manager-apk` from a successful run's artifacts.
+The workflow `.github/workflows/android-apk.yml` runs on pushes to `main` and can be started from **Actions → Build Android APK → Run workflow**. Download `finora-android-apk` from a successful run's artifacts.
 
 ## Accounting and privacy principles
 
