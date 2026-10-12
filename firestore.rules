@@ -60,6 +60,17 @@ service cloud.firestore {
         allow update: if isMessMember(messId) && resource.data.createdBy == request.auth.uid;
         allow delete: if false;
       }
+
+      match /meals/{mealId} {
+        allow read: if isMessMember(messId);
+        allow create, update: if isMessMember(messId)
+          && request.resource.data.memberUid == request.auth.uid
+          && request.resource.data.count is int
+          && request.resource.data.count >= 0
+          && request.resource.data.count <= 20
+          && request.resource.data.dateKey is string;
+        allow delete: if false;
+      }
     }
   }
 }
