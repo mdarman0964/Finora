@@ -13,12 +13,19 @@ class FirebaseOptionsConfig {
   static const iosBundleId = String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID');
   static const iosAppId = String.fromEnvironment('FIREBASE_IOS_APP_ID');
 
-  static bool get isConfigured =>
-      apiKey.isNotEmpty &&
-      appId.isNotEmpty &&
-      messagingSenderId.isNotEmpty &&
-      projectId.isNotEmpty &&
-      storageBucket.isNotEmpty;
+  static bool get isConfigured {
+    final commonValuesPresent = apiKey.isNotEmpty &&
+        appId.isNotEmpty &&
+        messagingSenderId.isNotEmpty &&
+        projectId.isNotEmpty &&
+        storageBucket.isNotEmpty;
+    if (!commonValuesPresent) return false;
+    if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      return iosAppId.isNotEmpty && iosBundleId.isNotEmpty;
+    }
+    return true;
+  }
 
   static FirebaseOptions get current {
     if (!isConfigured) {
