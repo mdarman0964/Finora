@@ -43,6 +43,7 @@ class AccountingService {
     await ref.set({
       'name': trimmed,
       'inviteCode': code,
+      'defaultSplitStrategy': 'equal',
       'ownerUid': uid,
       'memberUids': [uid],
       'createdAt': FieldValue.serverTimestamp(),
