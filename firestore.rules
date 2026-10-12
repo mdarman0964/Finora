@@ -15,7 +15,12 @@ service cloud.firestore {
     match /messInvites/{inviteCode} {
       allow get: if signedIn();
       allow list: if false;
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.messId is string
+        && exists(/databases/$(database)/documents/messes/$(request.resource.data.messId))
+        && get(/databases/$(database)/documents/messes/$(request.resource.data.messId)).data.ownerUid == request.auth.uid
+        && get(/databases/$(database)/documents/messes/$(request.resource.data.messId)).data.inviteCode == inviteCode;
       allow update, delete: if false;
     }
 
