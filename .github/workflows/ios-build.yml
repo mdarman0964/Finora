@@ -34,6 +34,30 @@ jobs:
           cp -R /tmp/finora_ios/ios/. ./ios/
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Finora" ios/Runner/Info.plist || true
 
+      - name: Configure Google Sign-In for iOS
+        env:
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import plistlib
+
+          client_id = os.environ.get("GOOGLE_IOS_CLIENT_ID", "").strip()
+          if client_id:
+              plist_path = "ios/Runner/Info.plist"
+              with open(plist_path, "rb") as source:
+                  info = plistlib.load(source)
+              info["GIDClientID"] = client_id
+              prefix = client_id.split(".apps.googleusercontent.com", 1)[0]
+              reversed_client_id = "com.googleusercontent.apps." + prefix
+              url_types = info.get("CFBundleURLTypes", [])
+              url_types.append({"CFBundleURLSchemes": [reversed_client_id]})
+              info["CFBundleURLTypes"] = url_types
+              with open(plist_path, "wb") as target:
+                  plistlib.dump(info, target)
+
+          PY
+
       - name: Resolve dependencies
         run: flutter pub get
 
@@ -52,6 +76,7 @@ jobs:
           FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
           FIREBASE_IOS_BUNDLE_ID: ${{ secrets.FIREBASE_IOS_BUNDLE_ID }}
           GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
         run: |
           flutter build ios --release --no-codesign \
             --dart-define=FIREBASE_API_KEY="$FIREBASE_API_KEY" \
@@ -60,4 +85,5 @@ jobs:
             --dart-define=FIREBASE_PROJECT_ID="$FIREBASE_PROJECT_ID" \
             --dart-define=FIREBASE_IOS_APP_ID="$FIREBASE_IOS_APP_ID" \
             --dart-define=FIREBASE_IOS_BUNDLE_ID="$FIREBASE_IOS_BUNDLE_ID" \
-            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
+            --dart-define=GOOGLE_IOS_CLIENT_ID="$GOOGLE_IOS_CLIENT_ID"
