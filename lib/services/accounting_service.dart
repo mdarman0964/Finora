@@ -49,11 +49,25 @@ class AccountingService {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    await ref.collection('members').doc(uid).set({
+      'uid': uid,
+      'displayName': user.displayName ?? user.email ?? 'Member',
+      'email': user.email,
+      'joinedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
     await _db.collection('messInvites').doc(code).set({
       'messId': ref.id,
       'ownerUid': uid,
       'createdAt': FieldValue.serverTimestamp(),
     });
+    await _db.collection('messes').doc(messId).collection('members').doc(uid).set({
+      'uid': uid,
+      'displayName': user.displayName ?? user.email ?? 'Member',
+      'email': user.email,
+      'joinedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     await _db.collection('users').doc(uid).set({
       'displayName': user.displayName ?? user.email ?? 'Member',
       'email': user.email,
@@ -84,14 +98,18 @@ class AccountingService {
     }, SetOptions(merge: true));
   }
 
-  Future<Map<String, Map<String, dynamic>>> getMemberProfiles(List<String> memberUids) async {
+  Future<Map<String, Map<String, dynamic>>> getMemberProfiles(
+    String messId,
+    List<String> memberUids,
+  ) async {
     final ids = memberUids.where((uid) => uid.isNotEmpty).toSet().toList();
     final profiles = <String, Map<String, dynamic>>{};
-    // Firestore whereIn supports up to 30 values; use smaller batches for
-    // compatibility with older projects and avoid oversized requests.
+    // Member display data lives under the shared mess, not in private user
+    // documents, so the UI never needs cross-account access to /users.
     for (var start = 0; start < ids.length; start += 10) {
       final batch = ids.skip(start).take(10).toList();
-      final snapshot = await _db.collection('users')
+      final snapshot = await _db.collection('messes').doc(messId)
+          .collection('members')
           .where(FieldPath.documentId, whereIn: batch).get();
       for (final doc in snapshot.docs) {
         profiles[doc.id] = doc.data();
