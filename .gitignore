@@ -1,0 +1,22 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+coverage/
+*.iml
+.idea/
+.vscode/
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+
+# Firebase local config and credentials
+.env
+.env.*
+service-account*.json
+firebase-adminsdk*.json
