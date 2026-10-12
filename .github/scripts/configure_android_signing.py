@@ -48,15 +48,29 @@ if kts.exists():
         marker = "plugins {"
         if marker not in content:
             sys.exit("::error::Could not find plugins block in build.gradle.kts")
-        content = content.replace(
-            marker,
-            'val keystoreProperties = Properties()\n'
-            'val keystorePropertiesFile = rootProject.file("key.properties")\n'
-            'if (keystorePropertiesFile.exists()) {\n'
-            '    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n'
-            '}\n\n' + marker,
-            1,
+        # Kotlin DSL requires the plugins block before executable statements.
+        start = content.index(marker)
+        opening = content.index("{", start)
+        depth = 0
+        end = None
+        for i in range(opening, len(content)):
+            if content[i] == "{":
+                depth += 1
+            elif content[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end is None:
+            sys.exit("::error::Could not parse plugins block in build.gradle.kts")
+        properties_block = (
+            '\\nval keystoreProperties = Properties()\\n'
+            'val keystorePropertiesFile = rootProject.file("key.properties")\\n'
+            'if (keystorePropertiesFile.exists()) {\\n'
+            '    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\\n'
+            '}\\n'
         )
+        content = content[:end] + properties_block + content[end:]
     if 'create("release")' not in content:
         content = re.sub(
             r'(?m)^\s*buildTypes\s*\{',
