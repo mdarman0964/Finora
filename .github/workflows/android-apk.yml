@@ -37,6 +37,7 @@ jobs:
         run: |
           flutter create --platforms=android --org com.finora --project-name finora /tmp/finora_android
           cp -R /tmp/finora_android/android ./android
+          sed -i 's/android:label="finora"/android:label="Finora"/' android/app/src/main/AndroidManifest.xml
 
       - name: Resolve dependencies
         run: flutter pub get
