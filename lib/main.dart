@@ -497,7 +497,7 @@ class _LedgerPageState extends State<LedgerPage> {
               if (path == null || path.isEmpty) return;
               try {
                 final url = await widget.service.receiptUrl(path);
-                if (mounted) {
+                if (context.mounted) {
                   showDialog<void>(
                     context: context,
                     builder: (dialogContext) => AlertDialog(
@@ -682,7 +682,7 @@ class _LoansPageState extends State<LoansPage> {
               );
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             } catch (e) {
-              if (mounted) {
+              if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(e.toString())),
                 );
