@@ -40,6 +40,14 @@ jobs:
           cp -R /tmp/finora_android/android/. ./android/
           sed -i 's/android:label="finora"/android:label="Finora"/' android/app/src/main/AndroidManifest.xml
 
+      - name: Configure stable Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: python3 .github/scripts/configure_android_signing.py
+
       - name: Resolve dependencies
         run: flutter pub get
 
@@ -63,6 +71,19 @@ jobs:
             --dart-define=FIREBASE_MESSAGING_SENDER_ID="$FIREBASE_MESSAGING_SENDER_ID" \
             --dart-define=FIREBASE_PROJECT_ID="$FIREBASE_PROJECT_ID" \
             --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+
+      - name: Print release certificate SHA-1
+        run: |
+          if [ -f android/app/upload-keystore.jks ]; then
+            keytool -list -v -keystore android/app/upload-keystore.jks \
+              -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" 2>/dev/null \
+              | grep -E 'SHA1:|SHA-1:'
+          else
+            echo "::warning::No stable keystore was configured; no stable release SHA-1 is available."
+          fi
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
