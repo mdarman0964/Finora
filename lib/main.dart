@@ -857,16 +857,62 @@ class MemberBalancesPage extends StatelessWidget {
               builder: (context, mealSnapshot) {
                 if (mealSnapshot.hasError) return Center(child: Text('মিলের তথ্য লোড করা যায়নি: ${mealSnapshot.error}'));
                 if (!mealSnapshot.hasData) return const Center(child: CircularProgressIndicator());
-                final balances = BalanceCalculator.calculate(
-                  memberUids: memberUids,
-                  transactions: transactionSnapshot.data!.docs.map((doc) => doc.data()).toList(),
-                  meals: mealSnapshot.data!.docs.map((doc) => doc.data()).toList(),
-                ).entries.toList()
-                  ..sort((a, b) => b.value.compareTo(a.value));
-                final money = NumberFormat.currency(locale: 'en_BD', symbol: '৳', decimalDigits: 2);
-                return FutureBuilder<Map<String, Map<String, dynamic>>>(
-                  future: service.getMemberProfiles(messId!, memberUids),
-                  builder: (context, profileSnapshot) {
+                final transactionRows = transactionSnapshot.data!.docs.map((doc) => doc.data()).toList();
+                final mealRows = mealSnapshot.data!.docs.map((doc) => doc.data()).toList();
+                return FutureBuilder<Map<String, dynamic>?>(
+                  future: service.latestMonthClosure(messId!),
+                  builder: (context, closureSnapshot) {
+                    if (closureSnapshot.hasError) {
+                      return Center(child: Text('মাসের closing balance লোড করা যায়নি: ${closureSnapshot.error}'));
+                    }
+                    if (closureSnapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final closure = closureSnapshot.data;
+                    Map<String, int> balanceMap;
+                    if (closure == null) {
+                      balanceMap = BalanceCalculator.calculate(
+                        memberUids: memberUids,
+                        transactions: transactionRows,
+                        meals: mealRows,
+                      );
+                    } else {
+                      final rawSnapshot = closure['balanceSnapshot'];
+                      balanceMap = <String, int>{
+                        for (final uid in memberUids) uid: 0,
+                        if (rawSnapshot is Map)
+                          for (final entry in rawSnapshot.entries)
+                            if (entry.key is String && entry.value is num)
+                              entry.key as String: (entry.value as num).toInt(),
+                      };
+                      final monthKey = closure['monthKey'] as String? ?? '';
+                      final parts = monthKey.split('-');
+                      if (parts.length == 2) {
+                        final year = int.tryParse(parts[0]);
+                        final month = int.tryParse(parts[1]);
+                        if (year != null && month != null && month >= 1 && month <= 12) {
+                          final cutoff = DateTime(year, month + 1);
+                          final laterTransactions = transactionRows.where((row) {
+                            final date = row['transactionDate'];
+                            return date is Timestamp && !date.toDate().isBefore(cutoff);
+                          }).toList();
+                          final delta = BalanceCalculator.calculate(
+                            memberUids: memberUids,
+                            transactions: laterTransactions,
+                            meals: mealRows,
+                          );
+                          for (final entry in delta.entries) {
+                            balanceMap[entry.key] = (balanceMap[entry.key] ?? 0) + entry.value;
+                          }
+                        }
+                      }
+                    }
+                    final balances = balanceMap.entries.toList()
+                      ..sort((a, b) => b.value.compareTo(a.value));
+                    final money = NumberFormat.currency(locale: 'en_BD', symbol: '৳', decimalDigits: 2);
+                    return FutureBuilder<Map<String, Map<String, dynamic>>>(
+                      future: service.getMemberProfiles(messId!, memberUids),
+                      builder: (context, profileSnapshot) {
                     final profiles = profileSnapshot.data ?? const <String, Map<String, dynamic>>{};
                     final settlements = SettlementCalculator.calculate(Map.fromEntries(balances));
                     final totalBalance = balances.fold<int>(0, (total, entry) => total + entry.value);
@@ -942,6 +988,8 @@ class MemberBalancesPage extends StatelessWidget {
                         const SizedBox(height: 8),
                         const Text('নোট: ব্যালেন্স ও সমন্বয়ের পরামর্শ প্রাথমিক হিসাব। সদস্যদের এন্ট্রি এবং মেসের হাতে থাকা নগদ মিলিয়ে তারপর টাকা পরিশোধ করুন।'),
                       ],
+                    );
+                      },
                     );
                   },
                 );
