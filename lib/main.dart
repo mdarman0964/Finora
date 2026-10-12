@@ -197,7 +197,7 @@ class _DashboardPageState extends State<DashboardPage> {
               end: Alignment.bottomRight,
               colors: [
                 theme.colorScheme.primary,
-                theme.colorScheme.primary.withOpacity(0.78),
+                theme.colorScheme.primary.withValues(alpha: 0.78),
               ],
             ),
           ),
