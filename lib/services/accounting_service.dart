@@ -84,6 +84,22 @@ class AccountingService {
     }, SetOptions(merge: true));
   }
 
+  Future<Map<String, Map<String, dynamic>>> getMemberProfiles(List<String> memberUids) async {
+    final ids = memberUids.where((uid) => uid.isNotEmpty).toSet().toList();
+    final profiles = <String, Map<String, dynamic>>{};
+    // Firestore whereIn supports up to 30 values; use smaller batches for
+    // compatibility with older projects and avoid oversized requests.
+    for (var start = 0; start < ids.length; start += 10) {
+      final batch = ids.skip(start).take(10).toList();
+      final snapshot = await _db.collection('users')
+          .where(FieldPath.documentId, whereIn: batch).get();
+      for (final doc in snapshot.docs) {
+        profiles[doc.id] = doc.data();
+      }
+    }
+    return profiles;
+  }
+
   Future<String?> currentMessId() async {
     final doc = await _db.collection('users').doc(user.uid).get();
     return doc.data()?['messId'] as String?;
