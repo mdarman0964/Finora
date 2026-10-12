@@ -99,6 +99,25 @@ void main() {
       expect(balances, {'a': 500, 'b': -300});
     });
 
+    test('uses the member list saved with an older transaction', () {
+      final balances = BalanceCalculator.calculate(
+        memberUids: ['a', 'b', 'c'],
+        transactions: [
+          {
+            'kind': 'messExpense',
+            'amountMinor': 900,
+            'paidByUid': 'a',
+            'memberUidsAtPosting': ['a', 'b'],
+            'splitStrategy': 'equal',
+            'status': 'posted',
+          },
+        ],
+        meals: const [],
+      );
+
+      expect(balances, {'a': -450, 'b': -450, 'c': 0});
+    });
+
     test('carries a closed balance forward without counting old entries twice', () {
       final balances = BalanceCalculator.carryForward(
         openingBalances: {'a': 500, 'b': -500},
