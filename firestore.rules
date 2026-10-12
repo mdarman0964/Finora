@@ -53,6 +53,14 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids', 'updatedAt']));
       allow delete: if isMessOwner(messId);
 
+      match /members/{memberUid} {
+        allow read: if isMessMember(messId);
+        allow create, update: if isMessMember(messId)
+          && request.auth.uid == memberUid
+          && request.resource.data.uid == request.auth.uid;
+        allow delete: if false;
+      }
+
       match /transactions/{transactionId} {
         allow read: if isMessMember(messId);
         allow create: if isMessMember(messId)
