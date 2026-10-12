@@ -144,9 +144,15 @@ class AccountingService {
     });
   }
 
-  Future<String> uploadReceipt(File image, {required String scope}) async {
+  Future<String> uploadReceipt(
+    File image, {
+    required String scope,
+    String? messId,
+  }) async {
     final uid = user.uid;
-    final path = '$scope/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final path = scope == 'mess'
+        ? 'mess/${messId ?? ''}/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg'
+        : 'personal/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
     final ref = _storage.ref().child('receipts/$path');
     await ref.putFile(image, SettableMetadata(contentType: 'image/jpeg'));
     return ref.fullPath;
