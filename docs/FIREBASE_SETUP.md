@@ -19,9 +19,10 @@ In GitHub, open **Settings → Secrets and variables → Actions → New reposit
 - `FIREBASE_MESSAGING_SENDER_ID`
 - `FIREBASE_PROJECT_ID`
 - `FIREBASE_STORAGE_BUCKET` (required for receipt uploads)
-- `FIREBASE_IOS_APP_ID` (optional; use the iOS app ID when preparing an iOS build)
+- `FIREBASE_IOS_APP_ID` (required for a working iOS app; use the registered iOS Firebase app ID)
+- `FIREBASE_IOS_BUNDLE_ID` (required for iOS; for this project use `com.finora.finora` unless you deliberately register a different bundle ID)
 
-Optional for web builds: `FIREBASE_AUTH_DOMAIN`. For iOS, set `FIREBASE_IOS_BUNDLE_ID` and register the iOS app in Firebase.
+Optional for web builds: `FIREBASE_AUTH_DOMAIN`. Register the iOS app in the same Firebase project and supply both iOS values before using the app on an iPhone or iPad.
 
 The API key is client configuration, not a substitute for database security. Never commit service-account JSON or admin credentials.
 
