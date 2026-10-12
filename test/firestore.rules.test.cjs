@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const { after, before, beforeEach, describe, it } = require('mocha');
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
-const { collection, doc, getDoc, setDoc, addDoc, Timestamp } = require('firebase/firestore');
+const { collection, doc, getDoc, setDoc, addDoc, updateDoc, Timestamp } = require('firebase/firestore');
 
 describe('Finora Firestore security rules', function () {
   let env;
@@ -56,7 +56,7 @@ describe('Finora Firestore security rules', function () {
       createdBy: uid,
       splitStrategy: 'equal',
       mealEligible: true,
-      status: 'posted',
+      status: kind === 'deposit' ? 'posted' : 'pending',
     };
   }
 
@@ -64,6 +64,14 @@ describe('Finora Firestore security rules', function () {
     const db = env.authenticatedContext('member1').firestore();
     await assertSucceeds(addDoc(collection(db, 'messes', 'mess1', 'transactions'),
       transactionData('member1', '2026-10')));
+  });
+
+  it('creates expenses as pending and only owner can approve', async function () {
+    const memberDb = env.authenticatedContext('member1').firestore();
+    const ref = await assertSucceeds(addDoc(collection(memberDb, 'messes', 'mess1', 'transactions'), transactionData('member1', '2026-10')));
+    await assertFails(updateDoc(ref, { status: 'posted', approvedByUid: 'member1', approvedAt: Timestamp.now() }));
+    const ownerDb = env.authenticatedContext('owner1').firestore();
+    await assertSucceeds(updateDoc(doc(ownerDb, ref.path), { status: 'posted', approvedByUid: 'owner1', approvedAt: Timestamp.now() }));
   });
 
   it('blocks transactions dated in a closed month', async function () {

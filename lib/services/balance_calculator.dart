@@ -56,6 +56,8 @@ class BalanceCalculator {
         strategy: strategy,
         payerUid: payer,
         monthMeals: _mealWeightsFor(row['transactionDate'], meals),
+        fixedAllocations: _intMap(row['allocations']),
+        customWeights: _intMap(row['splitWeights']),
       );
       for (final entry in allocations.entries) {
         balances[entry.key] = balances[entry.key]! - entry.value;
@@ -105,6 +107,11 @@ class BalanceCalculator {
     return weights;
   }
 
+  static Map<String, int> _intMap(dynamic value) {
+    if (value is! Map) return const {};
+    return {for (final entry in value.entries) if (entry.key is String && entry.value is num) entry.key as String: (entry.value as num).toInt()};
+  }
+
   static DateTime? _dateOf(dynamic value) {
     if (value is DateTime) return value;
     // Firestore Timestamp intentionally handled without importing Firestore:
@@ -126,14 +133,21 @@ class BalanceCalculator {
     required String strategy,
     required String payerUid,
     required Map<String, int> monthMeals,
+    required Map<String, int> fixedAllocations,
+    required Map<String, int> customWeights,
   }) {
     if (memberUids.isEmpty) return const {};
+    if (strategy == 'fixed' && fixedAllocations.isNotEmpty && fixedAllocations.values.every((value) => value >= 0) && fixedAllocations.values.fold<int>(0, (sum, value) => sum + value) == amount && fixedAllocations.keys.every(memberUids.contains)) {
+      return {for (final uid in memberUids) uid: fixedAllocations[uid] ?? 0};
+    }
     if (strategy == 'payer' && memberUids.contains(payerUid)) {
       return {payerUid: amount};
     }
 
     Map<String, int> weights;
-    if (strategy == 'meals' && monthMeals.values.any((value) => value > 0)) {
+    if (strategy == 'percentage' && customWeights.values.any((value) => value > 0)) {
+      weights = {for (final uid in memberUids) uid: customWeights[uid] ?? 0};
+    } else if (strategy == 'meals' && monthMeals.values.any((value) => value > 0)) {
       weights = {for (final uid in memberUids) uid: monthMeals[uid] ?? 0};
     } else {
       // Unknown strategies and months without meal records use equal shares.

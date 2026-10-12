@@ -91,10 +91,17 @@ service cloud.firestore {
           && request.resource.data.monthKey is string
           && request.resource.data.monthKey.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')
           && !exists(/databases/$(database)/documents/messes/$(messId)/monthClosures/$(request.resource.data.monthKey))
-          && request.resource.data.status == 'posted'
-          && request.resource.data.splitStrategy == get(/databases/$(database)/documents/messes/$(messId)).data.get('defaultSplitStrategy', 'equal')
+          && ((request.resource.data.kind == 'deposit' && request.resource.data.status == 'posted')
+            || (request.resource.data.kind in ['messExpense', 'memberPaidExpense'] && request.resource.data.status == 'pending'))
+          && request.resource.data.splitStrategy in ['equal', 'meals', 'payer', 'fixed', 'percentage']
+          && (request.resource.data.splitStrategy in ['equal', 'meals', 'payer'] || isMessOwner(messId))
+          && (request.resource.data.splitStrategy != 'fixed' || (request.resource.data.allocations is map && request.resource.data.allocations.keys().hasOnly(get(/databases/$(database)/documents/messes/$(messId)).data.memberUids)))
+          && (request.resource.data.splitStrategy != 'percentage' || (request.resource.data.splitWeights is map && request.resource.data.splitWeights.keys().hasOnly(get(/databases/$(database)/documents/messes/$(messId)).data.memberUids)))
           && request.resource.data.mealEligible is bool;
-        allow update, delete: if false;
+        allow update: if isMessOwner(messId) && resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvedByUid', 'approvedAt', 'updatedAt'])
+          && request.resource.data.status in ['posted', 'rejected'] && request.resource.data.approvedByUid == request.auth.uid;
+        allow delete: if false;
       }
 
       match /monthClosures/{monthKey} {

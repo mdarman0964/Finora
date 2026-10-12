@@ -251,6 +251,11 @@ class AccountingService {
     }, SetOptions(merge: true));
   }
 
+  Future<bool> isMessOwner(String messId) async {
+    final snapshot = await _db.collection('messes').doc(messId).get();
+    return snapshot.data()?['ownerUid'] == user.uid;
+  }
+
   Future<void> updateDefaultSplitStrategy(String messId, String strategy) async {
     const allowed = {'equal', 'meals', 'payer'};
     if (!allowed.contains(strategy)) throw ArgumentError('ভাগের নিয়মটি সঠিক নয়।');
@@ -281,40 +286,47 @@ class AccountingService {
     required DateTime transactionDate,
     String? receiptPath,
     String? splitStrategy,
+    Map<String, int>? allocations,
+    Map<String, int>? splitWeights,
     bool mealEligible = false,
   }) async {
     if (amountMinor <= 0) throw ArgumentError('টাকার পরিমাণ শূন্যের বেশি হতে হবে।');
-    final key = monthKey(transactionDate);
-    final closure = await _db.collection('messes').doc(messId)
-        .collection('monthClosures').doc(key).get();
-    if (closure.exists) {
-      throw StateError('$key মাসের হিসাব বন্ধ। ওই মাসে নতুন লেনদেন যোগ করা যাবে না।');
-    }
-    final messSnapshot = await _db.collection('messes').doc(messId).get();
-    final messData = messSnapshot.data();
-    if (messData == null || !(messData['memberUids'] as List<dynamic>? ?? const []).contains(user.uid)) {
-      throw StateError('আপনি এই মেসের সদস্য নন।');
-    }
-    final memberUidsAtPosting = (messData['memberUids'] as List<dynamic>? ?? const [])
-        .whereType<String>().toSet().toList()..sort();
+    if (!{'deposit', 'messExpense', 'memberPaidExpense'}.contains(kind)) throw ArgumentError('লেনদেনের ধরন সঠিক নয়।');
+    final key = monthKey(transactionDate); final messRef = _db.collection('messes').doc(messId);
+    final closure = await messRef.collection('monthClosures').doc(key).get();
+    if (closure.exists) throw StateError('$key মাসের হিসাব বন্ধ। ওই মাসে নতুন লেনদেন যোগ করা যাবে না।');
+    final messSnapshot = await messRef.get(); final messData = messSnapshot.data();
+    if (messData == null || !(messData['memberUids'] as List<dynamic>? ?? const []).contains(user.uid)) throw StateError('আপনি এই মেসের সদস্য নন।');
+    final memberUidsAtPosting = (messData['memberUids'] as List<dynamic>? ?? const []).whereType<String>().toSet().toList()..sort();
     final effectiveSplit = splitStrategy ?? (messData['defaultSplitStrategy'] as String? ?? 'equal');
-    await _db.collection('messes').doc(messId).collection('transactions').add({
-      'kind': kind,
-      'memberUidsAtPosting': memberUidsAtPosting,
-      'amountMinor': amountMinor,
-      'currencyCode': 'BDT',
-      'category': category.trim(),
-      'description': description.trim(),
-      'transactionDate': Timestamp.fromDate(transactionDate),
-      'monthKey': key,
-      'paidByUid': user.uid,
-      'createdBy': user.uid,
-      'receiptStoragePath': receiptPath,
-      'splitStrategy': effectiveSplit,
-      'mealEligible': mealEligible,
-      'status': 'posted',
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+    if (!{'equal', 'meals', 'payer', 'fixed', 'percentage'}.contains(effectiveSplit)) throw ArgumentError('খরচ ভাগের নিয়মটি সঠিক নয়।');
+    if (effectiveSplit == 'fixed') {
+      if (messData['ownerUid'] != user.uid) throw StateError('Custom split শুধু মেস ম্যানেজার নির্ধারণ করতে পারবেন।');
+      if (allocations == null || allocations.keys.any((uid) => !memberUidsAtPosting.contains(uid)) || allocations.values.any((value) => value < 0) || allocations.values.fold<int>(0, (sum, value) => sum + value) != amountMinor) throw ArgumentError('সদস্যদের নির্দিষ্ট অঙ্কের যোগফল মোট খরচের সমান হতে হবে।');
+    }
+    if (effectiveSplit == 'percentage') {
+      if (messData['ownerUid'] != user.uid) throw StateError('Custom split শুধু মেস ম্যানেজার নির্ধারণ করতে পারবেন।');
+      if (splitWeights == null || splitWeights.keys.any((uid) => !memberUidsAtPosting.contains(uid)) || splitWeights.values.any((value) => value < 0) || splitWeights.values.fold<int>(0, (sum, value) => sum + value) != 10000) throw ArgumentError('শতাংশের যোগফল ১০০% হতে হবে।');
+    }
+    final isExpense = kind == 'messExpense' || kind == 'memberPaidExpense';
+    await messRef.collection('transactions').add({
+      'kind': kind, 'memberUidsAtPosting': memberUidsAtPosting, 'amountMinor': amountMinor, 'currencyCode': 'BDT',
+      'category': category.trim(), 'description': description.trim(), 'transactionDate': Timestamp.fromDate(transactionDate), 'monthKey': key,
+      'paidByUid': user.uid, 'createdBy': user.uid, 'receiptStoragePath': receiptPath, 'splitStrategy': effectiveSplit,
+      if (effectiveSplit == 'fixed') 'allocations': allocations, if (effectiveSplit == 'percentage') 'splitWeights': splitWeights,
+      'mealEligible': mealEligible, 'status': isExpense ? 'pending' : 'posted',
+      'createdAt': FieldValue.serverTimestamp(), 'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> reviewMessTransaction({required String messId, required String transactionId, required bool approve}) async {
+    final current = user; final messRef = _db.collection('messes').doc(messId);
+    final transactionRef = messRef.collection('transactions').doc(transactionId);
+    await _db.runTransaction((transaction) async {
+      final mess = await transaction.get(messRef); final expense = await transaction.get(transactionRef);
+      if (mess.data()?['ownerUid'] != current.uid) throw StateError('শুধু মেসের মালিক খরচ অনুমোদন করতে পারবেন।');
+      if (!expense.exists || expense.data()?['status'] != 'pending') throw StateError('এই খরচটি আর অনুমোদনের অপেক্ষায় নেই।');
+      transaction.update(transactionRef, {'status': approve ? 'posted' : 'rejected', 'approvedByUid': current.uid, 'approvedAt': FieldValue.serverTimestamp(), 'updatedAt': FieldValue.serverTimestamp()});
     });
   }
 
