@@ -99,6 +99,26 @@ void main() {
       expect(balances, {'a': 500, 'b': -300});
     });
 
+    test('carries a closed balance forward without counting old entries twice', () {
+      final balances = BalanceCalculator.carryForward(
+        openingBalances: {'a': 500, 'b': -500},
+        memberUids: ['a', 'b'],
+        laterTransactions: [
+          {
+            'kind': 'memberPaidExpense',
+            'amountMinor': 200,
+            'paidByUid': 'a',
+            'splitStrategy': 'equal',
+            'transactionDate': DateTime(2026, 11, 2),
+            'status': 'posted',
+          },
+        ],
+        meals: const [],
+      );
+
+      expect(balances, {'a': 600, 'b': -600});
+    });
+
     test('falls back to equal split when meal counts are missing', () {
       final balances = BalanceCalculator.calculate(
         memberUids: ['a', 'b'],
