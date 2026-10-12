@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -33,7 +34,11 @@ class AccountingService {
     final trimmed = name.trim();
     if (trimmed.isEmpty) throw ArgumentError('মেসের নাম লিখুন।');
     final uid = user.uid;
-    final code = DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase();
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final random = math.Random.secure();
+    final code = List.generate(
+      10, (_) => alphabet[random.nextInt(alphabet.length)],
+    ).join();
     final ref = _db.collection('messes').doc();
     await ref.set({
       'name': trimmed,
@@ -42,6 +47,11 @@ class AccountingService {
       'memberUids': [uid],
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await _db.collection('messInvites').doc(code).set({
+      'messId': ref.id,
+      'ownerUid': uid,
+      'createdAt': FieldValue.serverTimestamp(),
     });
     await _db.collection('users').doc(uid).set({
       'displayName': user.displayName ?? user.email ?? 'Member',
@@ -55,19 +65,20 @@ class AccountingService {
   Future<void> joinMess(String inviteCode) async {
     final code = inviteCode.trim().toUpperCase();
     if (code.isEmpty) throw ArgumentError('ইনভাইট কোড লিখুন।');
-    final matches = await _db.collection('messes')
-        .where('inviteCode', isEqualTo: code).limit(1).get();
-    if (matches.docs.isEmpty) throw StateError('এই ইনভাইট কোডটি পাওয়া যায়নি।');
-    final mess = matches.docs.first;
+    final invite = await _db.collection('messInvites').doc(code).get();
+    final messId = invite.data()?['messId'] as String?;
+    if (!invite.exists || messId == null) {
+      throw StateError('এই ইনভাইট কোডটি পাওয়া যায়নি।');
+    }
     final uid = user.uid;
-    await _db.collection('messes').doc(mess.id).update({
+    await _db.collection('messes').doc(messId).update({
       'memberUids': FieldValue.arrayUnion([uid]),
       'updatedAt': FieldValue.serverTimestamp(),
     });
     await _db.collection('users').doc(uid).set({
       'displayName': user.displayName ?? user.email ?? 'Member',
       'email': user.email,
-      'messId': mess.id,
+      'messId': messId,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
