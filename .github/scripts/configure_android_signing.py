@@ -64,11 +64,11 @@ if kts.exists():
         if end is None:
             sys.exit("::error::Could not parse plugins block in build.gradle.kts")
         properties_block = (
-            '\\nval keystoreProperties = Properties()\\n'
-            'val keystorePropertiesFile = rootProject.file("key.properties")\\n'
-            'if (keystorePropertiesFile.exists()) {\\n'
-            '    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\\n'
-            '}\\n'
+            '\nval keystoreProperties = Properties()\n'
+            'val keystorePropertiesFile = rootProject.file("key.properties")\n'
+            'if (keystorePropertiesFile.exists()) {\n'
+            '    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n'
+            '}\n'
         )
         content = content[:end] + properties_block + content[end:]
     if 'create("release")' not in content:
