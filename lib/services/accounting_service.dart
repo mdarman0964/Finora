@@ -256,9 +256,16 @@ class AccountingService {
   }) async {
     if (amountMinor <= 0) throw ArgumentError('টাকার পরিমাণ শূন্যের বেশি হতে হবে।');
     final messSnapshot = await _db.collection('messes').doc(messId).get();
-    final effectiveSplit = splitStrategy ?? (messSnapshot.data()?['defaultSplitStrategy'] as String? ?? 'equal');
+    final messData = messSnapshot.data();
+    if (messData == null || !(messData['memberUids'] as List<dynamic>? ?? const []).contains(user.uid)) {
+      throw StateError('আপনি এই মেসের সদস্য নন।');
+    }
+    final memberUidsAtPosting = (messData['memberUids'] as List<dynamic>? ?? const [])
+        .whereType<String>().toSet().toList()..sort();
+    final effectiveSplit = splitStrategy ?? (messData['defaultSplitStrategy'] as String? ?? 'equal');
     await _db.collection('messes').doc(messId).collection('transactions').add({
       'kind': kind,
+      'memberUidsAtPosting': memberUidsAtPosting,
       'amountMinor': amountMinor,
       'currencyCode': 'BDT',
       'category': category.trim(),
