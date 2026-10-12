@@ -878,8 +878,7 @@ class MemberBalancesPage extends StatelessWidget {
                       );
                     } else {
                       final rawSnapshot = closure['balanceSnapshot'];
-                      balanceMap = <String, int>{
-                        for (final uid in memberUids) uid: 0,
+                      final openingBalances = <String, int>{
                         if (rawSnapshot is Map)
                           for (final entry in rawSnapshot.entries)
                             if (entry.key is String && entry.value is num)
@@ -896,15 +895,27 @@ class MemberBalancesPage extends StatelessWidget {
                             final date = row['transactionDate'];
                             return date is Timestamp && !date.toDate().isBefore(cutoff);
                           }).toList();
-                          final delta = BalanceCalculator.calculate(
+                          balanceMap = BalanceCalculator.carryForward(
+                            openingBalances: openingBalances,
                             memberUids: memberUids,
-                            transactions: laterTransactions,
+                            laterTransactions: laterTransactions,
                             meals: mealRows,
                           );
-                          for (final entry in delta.entries) {
-                            balanceMap[entry.key] = (balanceMap[entry.key] ?? 0) + entry.value;
-                          }
+                        } else {
+                          balanceMap = BalanceCalculator.carryForward(
+                            openingBalances: openingBalances,
+                            memberUids: memberUids,
+                            laterTransactions: const [],
+                            meals: mealRows,
+                          );
                         }
+                      } else {
+                        balanceMap = BalanceCalculator.carryForward(
+                          openingBalances: openingBalances,
+                          memberUids: memberUids,
+                          laterTransactions: const [],
+                          meals: mealRows,
+                        );
                       }
                     }
                     final balances = balanceMap.entries.toList()
