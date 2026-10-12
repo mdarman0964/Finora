@@ -229,7 +229,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
             ),
             if (!_personal && (_kind == 'messExpense' || _kind == 'memberPaidExpense')) ...[
               const SizedBox(height: 10),
-              DropdownButtonFormField<String>(initialValue: _splitStrategy, decoration: const InputDecoration(labelText: 'খরচ ভাগের নিয়ম', border: OutlineInputBorder()), items: const [
+              DropdownButtonFormField<String>(initialValue: _splitStrategy, decoration: const InputDecoration(labelText: 'খরচ ভাগের নিয়ম', border: OutlineInputBorder()), items: [
                 DropdownMenuItem(value: 'equal', child: Text('সমান ভাগ')), DropdownMenuItem(value: 'meals', child: Text('মিল অনুযায়ী')), DropdownMenuItem(value: 'payer', child: Text('যিনি দিয়েছেন')),
                 DropdownMenuItem(enabled: _isMessOwner, value: 'fixed', child: Text('সদস্যভিত্তিক নির্দিষ্ট টাকা (ম্যানেজার)')), DropdownMenuItem(enabled: _isMessOwner, value: 'percentage', child: Text('সদস্যভিত্তিক শতাংশ (ম্যানেজার)')),
               ], onChanged: _busy ? null : (value) => setState(() => _splitStrategy = value ?? 'equal')),
