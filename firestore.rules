@@ -12,6 +12,13 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/messes/$(messId)).data.ownerUid == request.auth.uid;
     }
 
+    match /messInvites/{inviteCode} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     match /users/{uid} {
       allow read, create, update: if signedIn() && request.auth.uid == uid;
       allow delete: if false;
@@ -30,17 +37,20 @@ service cloud.firestore {
     }
 
     match /messes/{messId} {
-      allow read: if isMessMember(messId)
-        || (signedIn() && resource.data.inviteCode is string);
+      allow read: if isMessMember(messId);
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && request.auth.uid in request.resource.data.memberUids;
-      allow update: if isMessMember(messId)
-        && request.resource.data.ownerUid == resource.data.ownerUid
-        && request.resource.data.memberUids.hasAll(resource.data.memberUids)
-        && (request.auth.uid == resource.data.ownerUid
-          || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids', 'updatedAt']));
+      allow update: if isMessOwner(messId)
+        || (signedIn()
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && get(/databases/$(database)/documents/messInvites/$(resource.data.inviteCode)).data.messId == messId
+          && request.resource.data.memberUids.hasAll(resource.data.memberUids)
+          && request.auth.uid in request.resource.data.memberUids
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids', 'updatedAt']));
       allow delete: if isMessOwner(messId);
+
       match /transactions/{transactionId} {
         allow read: if isMessMember(messId);
         allow create: if isMessMember(messId)
