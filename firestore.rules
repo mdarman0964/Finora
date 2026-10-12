@@ -40,8 +40,15 @@ service cloud.firestore {
       allow read: if isMessMember(messId);
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
-        && request.auth.uid in request.resource.data.memberUids;
-      allow update: if isMessOwner(messId)
+        && request.resource.data.memberUids is list
+        && request.resource.data.memberUids.size() == 1
+        && request.auth.uid in request.resource.data.memberUids
+        && request.resource.data.inviteCode is string;
+      allow update: if (isMessOwner(messId)
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.memberUids == resource.data.memberUids
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'defaultSplitStrategy', 'updatedAt']))
         || (signedIn()
           && request.resource.data.ownerUid == resource.data.ownerUid
           && request.resource.data.inviteCode == resource.data.inviteCode
@@ -65,12 +72,28 @@ service cloud.firestore {
         allow read: if isMessMember(messId);
         allow create: if isMessMember(messId)
           && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.paidByUid == request.auth.uid
           && request.resource.data.amountMinor is int
           && request.resource.data.amountMinor > 0
+          && request.resource.data.kind in ['deposit', 'messExpense', 'memberPaidExpense']
+          && request.resource.data.transactionDate is timestamp
+          && request.resource.data.status == 'posted'
           && request.resource.data.splitStrategy == get(/databases/$(database)/documents/messes/$(messId)).data.get('defaultSplitStrategy', 'equal')
           && request.resource.data.mealEligible is bool;
-        allow update: if isMessMember(messId) && resource.data.createdBy == request.auth.uid;
-        allow delete: if false;
+        allow update, delete: if false;
+      }
+
+      match /monthClosures/{monthKey} {
+        allow read: if isMessMember(messId);
+        allow create: if isMessOwner(messId)
+          && request.resource.data.monthKey == monthKey
+          && request.resource.data.closedBy == request.auth.uid
+          && request.resource.data.balanceSnapshot is map
+          && request.resource.data.totalMeals is int
+          && request.resource.data.mealEligibleExpenseMinor is int
+          && request.resource.data.incomeMinor is int
+          && request.resource.data.expenseMinor is int;
+        allow update, delete: if false;
       }
 
       match /meals/{mealId} {
@@ -80,7 +103,8 @@ service cloud.firestore {
           && request.resource.data.count is int
           && request.resource.data.count >= 0
           && request.resource.data.count <= 20
-          && request.resource.data.dateKey is string;
+          && request.resource.data.dateKey is string
+          && mealId == request.auth.uid + '_' + request.resource.data.dateKey;
         allow delete: if false;
       }
     }
