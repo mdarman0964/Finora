@@ -18,9 +18,9 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.messId is string
-        && exists(/databases/$(database)/documents/messes/$(request.resource.data.messId))
-        && get(/databases/$(database)/documents/messes/$(request.resource.data.messId)).data.ownerUid == request.auth.uid
-        && get(/databases/$(database)/documents/messes/$(request.resource.data.messId)).data.inviteCode == inviteCode;
+        && existsAfter(/databases/$(database)/documents/messes/$(request.resource.data.messId))
+        && getAfter(/databases/$(database)/documents/messes/$(request.resource.data.messId)).data.ownerUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/messes/$(request.resource.data.messId)).data.inviteCode == inviteCode;
       allow update, delete: if false;
     }
 
@@ -67,9 +67,12 @@ service cloud.firestore {
 
       match /members/{memberUid} {
         allow read: if isMessMember(messId);
-        allow create, update: if isMessMember(messId)
+        allow create, update: if signedIn()
           && request.auth.uid == memberUid
-          && request.resource.data.uid == request.auth.uid;
+          && request.resource.data.uid == request.auth.uid
+          && (isMessMember(messId)
+            || (existsAfter(/databases/$(database)/documents/messes/$(messId))
+              && request.auth.uid in getAfter(/databases/$(database)/documents/messes/$(messId)).data.memberUids));
         allow delete: if false;
       }
 
