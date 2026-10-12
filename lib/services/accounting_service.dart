@@ -95,6 +95,45 @@ class AccountingService {
       _db.collection('messes').doc(messId).collection('transactions')
           .orderBy('transactionDate', descending: true).snapshots();
 
+  Stream<QuerySnapshot<Map<String, dynamic>>> mealCounts(String messId) =>
+      _db.collection('messes').doc(messId).collection('meals').snapshots();
+
+  Future<void> addMealCount({
+    required String messId,
+    required int count,
+    DateTime? date,
+  }) async {
+    if (count < 0 || count > 20) {
+      throw ArgumentError('মিলের সংখ্যা ০ থেকে ২০-এর মধ্যে হতে হবে।');
+    }
+    final now = date ?? DateTime.now();
+    final day = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final uid = user.uid;
+    await _db.collection('messes').doc(messId).collection('meals')
+        .doc('${uid}_$day').set({
+      'memberUid': uid,
+      'memberName': user.displayName ?? user.email ?? 'Member',
+      'dateKey': day,
+      'count': count,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> updateDefaultSplitStrategy(String messId, String strategy) async {
+    const allowed = {'equal', 'meals', 'payer'};
+    if (!allowed.contains(strategy)) throw ArgumentError('ভাগের নিয়মটি সঠিক নয়।');
+    final ref = _db.collection('messes').doc(messId);
+    final snapshot = await ref.get();
+    if (snapshot.data()?['ownerUid'] != user.uid) {
+      throw StateError('শুধু মেস ম্যানেজার ভাগের নিয়ম পরিবর্তন করতে পারবেন।');
+    }
+    await ref.update({
+      'defaultSplitStrategy': strategy,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Stream<QuerySnapshot<Map<String, dynamic>>> personalTransactions() =>
       _personalTransactions(user.uid)
           .orderBy('transactionDate', descending: true).snapshots();
@@ -110,9 +149,12 @@ class AccountingService {
     required String description,
     required DateTime transactionDate,
     String? receiptPath,
-    String splitStrategy = 'equal',
+    String? splitStrategy,
+    bool mealEligible = false,
   }) async {
     if (amountMinor <= 0) throw ArgumentError('টাকার পরিমাণ শূন্যের বেশি হতে হবে।');
+    final messSnapshot = await _db.collection('messes').doc(messId).get();
+    final effectiveSplit = splitStrategy ?? (messSnapshot.data()?['defaultSplitStrategy'] as String? ?? 'equal');
     await _db.collection('messes').doc(messId).collection('transactions').add({
       'kind': kind,
       'amountMinor': amountMinor,
@@ -123,7 +165,8 @@ class AccountingService {
       'paidByUid': user.uid,
       'createdBy': user.uid,
       'receiptStoragePath': receiptPath,
-      'splitStrategy': splitStrategy,
+      'splitStrategy': effectiveSplit,
+      'mealEligible': mealEligible,
       'status': 'posted',
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
