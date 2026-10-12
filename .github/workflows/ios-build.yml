@@ -30,7 +30,8 @@ jobs:
       - name: Generate iOS platform files
         run: |
           flutter create --platforms=ios --org com.finora --project-name finora /tmp/finora_ios
-          cp -R /tmp/finora_ios/ios ./ios
+          mkdir -p ios
+          cp -R /tmp/finora_ios/ios/. ./ios/
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Finora" ios/Runner/Info.plist || true
 
       - name: Resolve dependencies
