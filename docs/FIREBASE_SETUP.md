@@ -38,7 +38,35 @@ firebase deploy --only firestore:rules
 
 The rules are a baseline and should be exercised against the Firebase Emulator before production use. Review access rules again if you add admin roles, transaction approvals, or exports.
 
-## 4. Build an APK
+## 4. Stable Android release signing (Google OAuth SHA-1)
+
+The Android workflow supports a persistent release keystore. The keystore and `android/key.properties` are created only on the GitHub Actions runner and are ignored by git; never commit either file.
+
+Create the keystore once on a trusted computer with Java's `keytool` installed. Keep the keystore and passwords in a safe backup. Do not regenerate it for each build:
+
+```bash
+keytool -genkeypair -v -keystore finora-upload.jks -alias finora -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Use a strong keystore password and key password. For the simplest setup, you may use the same password for both. Convert the keystore file to a single-line Base64 value:
+
+- Linux/macOS: `base64 -w 0 finora-upload.jks` (on macOS, use `base64 finora-upload.jks | tr -d '\\n'`)
+- Windows PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("finora-upload.jks"))`
+
+In the repository, open **Settings → Secrets and variables → Actions → New repository secret** and add:
+
+- `ANDROID_KEYSTORE_BASE64`: the complete Base64 output from the previous step
+- `ANDROID_KEYSTORE_PASSWORD`: the keystore password
+- `ANDROID_KEY_ALIAS`: `finora` (or the alias you chose)
+- `ANDROID_KEY_PASSWORD`: the key password
+
+After saving all four secrets, run **Actions → Build Android APK → Run workflow**. The workflow prints the signing certificate SHA-1 in the **Print release certificate SHA-1** step. Copy the SHA-1 value from that log; never copy or print the keystore or its passwords.
+
+In Google Cloud Console, open **Google Auth Platform → Clients → Create client → Android** (or edit the existing Android OAuth client). Set package name to `com.finora.finora` and paste the SHA-1 fingerprint. Save the client. The package name and SHA-1 must match the APK that you install. If an app has already been published with a different signing key, do not switch keys without checking the existing distribution/signing setup first.
+
+If the four signing secrets are not configured, CI warns and continues with the temporary generated signing configuration. That fallback is only for build checks; it does not provide a stable SHA-1 for Google Sign-In.
+
+## 5. Build an APK
 
 After adding the GitHub Actions secrets, open **Actions → Build Android APK → Run workflow**. The workflow passes the values as Dart compile-time definitions and uploads an APK artifact when the build succeeds.
 
