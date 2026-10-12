@@ -17,7 +17,8 @@ class FirebaseOptionsConfig {
       apiKey.isNotEmpty &&
       appId.isNotEmpty &&
       messagingSenderId.isNotEmpty &&
-      projectId.isNotEmpty;
+      projectId.isNotEmpty &&
+      storageBucket.isNotEmpty;
 
   static FirebaseOptions get current {
     if (!isConfigured) {
