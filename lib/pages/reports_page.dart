@@ -31,6 +31,7 @@ class _ReportsPageState extends State<ReportsPage> {
     if (query == null) return [];
     final result = await query.orderBy('transactionDate', descending: true).get();
     return result.docs.map((doc) => doc.data()).where((row) {
+      if (row['status'] != null && row['status'] != 'posted') return false;
       final date = row['transactionDate'];
       if (date is! Timestamp) return false;
       final value = date.toDate();
@@ -192,7 +193,7 @@ class _ReportsPageState extends State<ReportsPage> {
           const Card(child: ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('রিপোর্টে লেনদেনের তালিকা থাকে'),
-            subtitle: Text('বর্তমান সংস্করণে মাসভিত্তিক ফিল্টার ও meal-rate summary পরবর্তী ধাপে যোগ হবে।'),
+            subtitle: Text('রিপোর্টে নির্বাচিত মাসের অনুমোদিত লেনদেন, মোট আয় ও মোট খরচ থাকবে।'),
           )),
         ],
       );

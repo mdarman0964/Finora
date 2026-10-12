@@ -17,7 +17,14 @@ class LedgerPage extends StatefulWidget {
 
 class _LedgerPageState extends State<LedgerPage> {
   bool _personal = false;
-
+  bool _isMessOwner = false;
+  @override
+  void initState() { super.initState(); _loadOwnerStatus(); }
+  Future<void> _loadOwnerStatus() async { if (widget.messId == null) return; try { final owner = await widget.service.isMessOwner(widget.messId!); if (mounted) setState(() => _isMessOwner = owner); } catch (_) {} }
+  Future<void> _reviewTransaction(String id, bool approve) async {
+    try { await widget.service.reviewMessTransaction(messId: widget.messId!, transactionId: id, approve: approve); if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(approve ? 'খরচ অনুমোদিত হয়েছে।' : 'খরচ বাতিল করা হয়েছে।'))); }
+    catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('পর্যালোচনা করা যায়নি: $e'))); }
+  }
   @override
   Widget build(BuildContext context) => Column(children: [
         Padding(
@@ -66,9 +73,15 @@ class _LedgerPageState extends State<LedgerPage> {
             leading: CircleAvatar(child: Icon(isIncome ? Icons.south_west : Icons.north_east)),
             title: Text(data['description'] as String? ?? data['category'] as String? ?? kind),
             subtitle: Text('$dateText • ${data['category'] ?? kind}'),
-            trailing: Text('${isIncome ? '+' : '-'}৳$amount',
-                style: TextStyle(fontWeight: FontWeight.bold,
-                    color: isIncome ? Colors.green : Theme.of(context).colorScheme.error)),
+            trailing: SizedBox(width: _isMessOwner && data['status'] == 'pending' && !_personal ? 112 : 92,
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text('${isIncome ? '+' : '-'}৳$amount', style: TextStyle(fontWeight: FontWeight.bold, color: isIncome ? Colors.green : Theme.of(context).colorScheme.error)),
+                if (!_personal && data['status'] == 'pending') Text('অনুমোদনের অপেক্ষায়', style: Theme.of(context).textTheme.labelSmall),
+                if (_isMessOwner && !_personal && data['status'] == 'pending') Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(tooltip: 'অনুমোদন', visualDensity: VisualDensity.compact, icon: const Icon(Icons.check_circle_outline, color: Colors.green), onPressed: () => _reviewTransaction(docs[index].id, true)),
+                  IconButton(tooltip: 'বাতিল', visualDensity: VisualDensity.compact, icon: const Icon(Icons.cancel_outlined, color: Colors.red), onPressed: () => _reviewTransaction(docs[index].id, false)),
+                ]),
+              ])),
             onTap: () async {
               final path = data['receiptStoragePath'] as String?;
               if (path == null || path.isEmpty) return;
@@ -117,7 +130,17 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   File? _receipt;
   String? _error;
   bool _mealEligible = false;
-
+  String _splitStrategy = 'equal';
+  Future<List<Map<String, String>>>? _membersFuture;
+  final Map<String, TextEditingController> _allocationControllers = {};
+  @override
+  void initState() { super.initState(); if (widget.messId != null) _membersFuture = _loadMembers(); }
+  Future<List<Map<String, String>>> _loadMembers() async {
+    final snapshot = await FirebaseFirestore.instance.collection('messes').doc(widget.messId).get();
+    final uids = (snapshot.data()?['memberUids'] as List<dynamic>? ?? const []).whereType<String>().toList()..sort();
+    final profiles = await widget.service.getMemberProfiles(widget.messId!, uids);
+    return uids.map((uid) { final name = (profiles[uid]?['displayName'] as String? ?? '').trim(); return {'uid': uid, 'name': name.isEmpty ? uid : name}; }).toList();
+  }
   Future<void> _pickReceipt() async {
     final image = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
     if (image != null && mounted) setState(() => _receipt = File(image.path));
@@ -129,9 +152,11 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
       setState(() => _error = 'সঠিক টাকার পরিমাণ লিখুন।');
       return;
     }
-    if (!_personal && widget.messId == null) {
-      setState(() => _error = 'আগে একটি মেস তৈরি করুন অথবা যোগ দিন।');
-      return;
+    if (!_personal && widget.messId == null) { setState(() => _error = 'আগে একটি মেস তৈরি করুন অথবা যোগ দিন।'); return; }
+    Map<String, int>? allocations; Map<String, int>? splitWeights;
+    if (!_personal && (_kind == 'messExpense' || _kind == 'memberPaidExpense')) {
+      if (_splitStrategy == 'fixed') { allocations = {}; for (final entry in _allocationControllers.entries) { final value = entry.value.text.trim().isEmpty ? 0 : double.tryParse(entry.value.text.trim()); if (value == null || value < 0) { setState(() => _error = 'প্রতিটি সদস্যের জন্য সঠিক টাকার অঙ্ক লিখুন।'); return; } allocations[entry.key] = (value * 100).round(); } if (allocations.values.fold<int>(0, (sum, value) => sum + value) != (amount * 100).round()) { setState(() => _error = 'সদস্যদের নির্দিষ্ট অঙ্কের যোগফল মোট খরচের সমান হতে হবে।'); return; } }
+      else if (_splitStrategy == 'percentage') { splitWeights = {}; for (final entry in _allocationControllers.entries) { final value = entry.value.text.trim().isEmpty ? 0 : double.tryParse(entry.value.text.trim()); if (value == null || value < 0 || value > 100) { setState(() => _error = 'প্রতিটি সদস্যের শতাংশ ০ থেকে ১০০-এর মধ্যে দিন।'); return; } splitWeights[entry.key] = (value * 100).round(); } if (splitWeights.values.fold<int>(0, (sum, value) => sum + value) != 10000) { setState(() => _error = 'শতাংশের যোগফল ঠিক ১০০% হতে হবে।'); return; } }
     }
     setState(() { _busy = true; _error = null; });
     try {
@@ -162,6 +187,9 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
           transactionDate: DateTime.now(),
           receiptPath: receiptPath,
           mealEligible: _mealEligible,
+          splitStrategy: _splitStrategy,
+          allocations: allocations,
+          splitWeights: splitWeights,
         );
       }
       if (mounted) Navigator.pop(context);
@@ -173,7 +201,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   }
 
   @override
-  void dispose() { _amount.dispose(); _category.dispose(); _description.dispose(); super.dispose(); }
+  void dispose() { _amount.dispose(); _category.dispose(); _description.dispose(); for (final controller in _allocationControllers.values) { controller.dispose(); } super.dispose(); }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
@@ -195,6 +223,19 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                   .entries.map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
               onChanged: (value) => setState(() => _kind = value ?? 'messExpense'),
             ),
+            if (!_personal && (_kind == 'messExpense' || _kind == 'memberPaidExpense')) ...[
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(initialValue: _splitStrategy, decoration: const InputDecoration(labelText: 'খরচ ভাগের নিয়ম', border: OutlineInputBorder()), items: const [
+                DropdownMenuItem(value: 'equal', child: Text('সমান ভাগ')), DropdownMenuItem(value: 'meals', child: Text('মিল অনুযায়ী')), DropdownMenuItem(value: 'payer', child: Text('যিনি দিয়েছেন')),
+                DropdownMenuItem(value: 'fixed', child: Text('সদস্যভিত্তিক নির্দিষ্ট টাকা (ম্যানেজার)')), DropdownMenuItem(value: 'percentage', child: Text('সদস্যভিত্তিক শতাংশ (ম্যানেজার)')),
+              ], onChanged: _busy ? null : (value) => setState(() => _splitStrategy = value ?? 'equal')),
+              if (_splitStrategy == 'fixed' || _splitStrategy == 'percentage') FutureBuilder<List<Map<String, String>>>(future: _membersFuture, builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator());
+                if (snapshot.hasError || snapshot.data == null || snapshot.data!.isEmpty) return const Text('সদস্যদের তালিকা পাওয়া যায়নি।');
+                final members = snapshot.data!; for (final member in members) { _allocationControllers.putIfAbsent(member['uid']!, () => TextEditingController()); }
+                return Column(children: [const SizedBox(height: 8), for (final member in members) Padding(padding: const EdgeInsets.only(bottom: 8), child: TextField(controller: _allocationControllers[member['uid']], keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: "${member['name']} — ${_splitStrategy == 'fixed' ? 'টাকা' : 'শতাংশ'}", suffixText: _splitStrategy == 'fixed' ? '৳' : '%', border: const OutlineInputBorder()))) ]);
+              }),
+            ],
             const SizedBox(height: 10),
             TextField(controller: _amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'টাকার পরিমাণ (৳)', border: OutlineInputBorder())),
             const SizedBox(height: 10),
