@@ -1,4 +1,4 @@
-# Project plan — HisabKhata Mess Manager
+# Project plan — Finora
 
 ## Product goal
 A standalone Flutter app for Android first, designed to remain iOS-compatible. Premium Material 3 UI, Bangla/English, dark/light themes, shared multi-member mess records, and private personal finance.
