@@ -2,8 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hisabkhata_mess_manager/main.dart';
 
 void main() {
-  testWidgets('dashboard loads with primary action', (WidgetTester tester) async {
+  testWidgets('shows setup guidance when Firebase values are not configured',
+      (WidgetTester tester) async {
     await tester.pumpWidget(const HisabKhataApp());
-    expect(find.text('হিসাব যোগ করুন'), findsOneWidget);
+    await tester.pump();
+    expect(find.text('Firebase সেটআপ প্রয়োজন'), findsOneWidget);
+    expect(find.text('https://console.firebase.google.com/'), findsOneWidget);
   });
 }
