@@ -1,6 +1,20 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
 
-void main() => runApp(const HisabKhataApp());
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+
+import 'firebase_options.dart';
+import 'services/accounting_service.dart';
+import 'services/report_service.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const HisabKhataApp());
+}
 
 class HisabKhataApp extends StatefulWidget {
   const HisabKhataApp({super.key});
@@ -10,519 +24,787 @@ class HisabKhataApp extends StatefulWidget {
 }
 
 class _HisabKhataAppState extends State<HisabKhataApp> {
+  late final Future<void> _boot = _initialize();
   ThemeMode _themeMode = ThemeMode.light;
-  bool _bangla = true;
+
+  Future<void> _initialize() async {
+    if (FirebaseOptionsConfig.isConfigured) {
+      await Firebase.initializeApp(options: FirebaseOptionsConfig.current);
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'HisabKhata Mess Manager',
-      themeMode: _themeMode,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF138A62),
-          brightness: Brightness.light,
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'HisabKhata Mess Manager',
+        debugShowCheckedModeBanner: false,
+        themeMode: _themeMode,
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF138A62)),
+          scaffoldBackgroundColor: const Color(0xFFF5F7F6),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF5F7F6),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF38C793),
-          brightness: Brightness.dark,
+        darkTheme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF38C793),
+            brightness: Brightness.dark,
+          ),
         ),
-      ),
-      home: DashboardPage(
-        bangla: _bangla,
-        onLanguage: () => setState(() => _bangla = !_bangla),
-        onTheme: () => setState(() {
-          _themeMode =
-              _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
-        }),
-      ),
-    );
+        home: FutureBuilder<void>(
+          future: _boot,
+          builder: (context, snapshot) {
+            if (!FirebaseOptionsConfig.isConfigured || snapshot.hasError) {
+              return FirebaseSetupPage(error: snapshot.error?.toString());
+            }
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            }
+            return AuthGate(
+              onToggleTheme: () => setState(() {
+                _themeMode = _themeMode == ThemeMode.light
+                    ? ThemeMode.dark
+                    : ThemeMode.light;
+              }),
+            );
+          },
+        ),
+      );
+}
+
+class FirebaseSetupPage extends StatelessWidget {
+  const FirebaseSetupPage({super.key, this.error});
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_off_rounded, size: 62),
+                    const SizedBox(height: 16),
+                    Text('Firebase সেটআপ প্রয়োজন',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'লগইন, অনলাইন সিঙ্ক, রসিদ সংরক্ষণ এবং রিপোর্ট চালু করতে Firebase project-এর configuration যোগ করতে হবে। কোনো API key এই repository-তে hard-code করা হয়নি.',
+                      textAlign: TextAlign.center,
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 12),
+                      SelectableText(error!, style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      )),
+                    ],
+                    const SizedBox(height: 18),
+                    const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('পরবর্তী ধাপ', style: TextStyle(fontWeight: FontWeight.bold)),
+                            SizedBox(height: 8),
+                            Text('1. Firebase Console-এ Android app যোগ করুন।'),
+                            Text('2. Authentication-এ Email/Password চালু করুন।'),
+                            Text('3. Firestore Database ও Storage তৈরি করুন।'),
+                            Text('4. docs/FIREBASE_SETUP.md অনুযায়ী build secrets দিন।'),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const SelectableText('https://console.firebase.google.com/'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key, required this.onToggleTheme});
+  final VoidCallback onToggleTheme;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          }
+          if (snapshot.data == null) return const AuthPage();
+          return DashboardPage(onToggleTheme: onToggleTheme);
+        },
+      );
+}
+
+class AuthPage extends StatefulWidget {
+  const AuthPage({super.key});
+  @override
+  State<AuthPage> createState() => _AuthPageState();
+}
+
+class _AuthPageState extends State<AuthPage> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  final _name = TextEditingController();
+  bool _register = false;
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _submit() async {
+    setState(() { _busy = true; _error = null; });
+    try {
+      final auth = FirebaseAuth.instance;
+      UserCredential result;
+      if (_register) {
+        result = await auth.createUserWithEmailAndPassword(
+          email: _email.text.trim(),
+          password: _password.text,
+        );
+        await result.user?.updateDisplayName(_name.text.trim());
+      } else {
+        result = await auth.signInWithEmailAndPassword(
+          email: _email.text.trim(),
+          password: _password.text,
+        );
+      }
+      final user = result.user;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'displayName': user.displayName ?? _name.text.trim(),
+          'email': user.email,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = e.message ?? e.code);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Icon(Icons.account_balance_wallet_rounded, size: 56),
+                    const SizedBox(height: 12),
+                    Text('HisabKhata', textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
+                    const Text('Mess Manager & Personal Finance', textAlign: TextAlign.center),
+                    const SizedBox(height: 28),
+                    if (_register) ...[
+                      TextField(controller: _name, decoration: const InputDecoration(labelText: 'নাম', border: OutlineInputBorder())),
+                      const SizedBox(height: 12),
+                    ],
+                    TextField(
+                      controller: _email,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(labelText: 'ইমেইল', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _password,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)', border: OutlineInputBorder()),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 10),
+                      Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    ],
+                    const SizedBox(height: 18),
+                    FilledButton(
+                      onPressed: _busy ? null : _submit,
+                      child: _busy ? const CircularProgressIndicator() : Text(_register ? 'অ্যাকাউন্ট তৈরি করুন' : 'লগইন'),
+                    ),
+                    TextButton(
+                      onPressed: _busy ? null : () => setState(() { _register = !_register; _error = null; }),
+                      child: Text(_register ? 'আগে থেকেই অ্যাকাউন্ট আছে? লগইন' : 'নতুন অ্যাকাউন্ট তৈরি করুন'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({
-    super.key,
-    required this.bangla,
-    required this.onLanguage,
-    required this.onTheme,
-  });
-
-  final bool bangla;
-  final VoidCallback onLanguage;
-  final VoidCallback onTheme;
-
+  const DashboardPage({super.key, required this.onToggleTheme});
+  final VoidCallback onToggleTheme;
   @override
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
 class _DashboardPageState extends State<DashboardPage> {
   int _tab = 0;
-
-  String t(String bn, String en) => widget.bangla ? bn : en;
+  final _service = AccountingService();
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 18,
-        title: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: const Icon(
-                Icons.account_balance_wallet_rounded,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'HisabKhata',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-                  ),
-                  Text(t('মেস ম্যানেজার', 'Mess Manager'),
-                      style: Theme.of(context).textTheme.labelMedium),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: t('ভাষা পরিবর্তন', 'Change language'),
-              onPressed: widget.onLanguage,
-              icon: const Icon(Icons.translate_rounded),
-            ),
-            IconButton(
-              tooltip: t('থিম পরিবর্তন', 'Toggle theme'),
-              onPressed: widget.onTheme,
-              icon: const Icon(Icons.dark_mode_outlined),
-            ),
-          ],
-        ),
-      ),
-      body: IndexedStack(
-        index: _tab,
-        children: [
-          _home(context),
-          _placeholder(
-            context,
-            Icons.receipt_long_rounded,
-            t('দৈনন্দিন হিসাব', 'Daily ledger'),
-            t('মেসের জমা, খরচ ও রসিদ এখানে থাকবে।',
-                'Mess deposits, expenses and receipts will appear here.'),
-          ),
-          _placeholder(
-            context,
-            Icons.bar_chart_rounded,
-            t('রিপোর্ট', 'Reports'),
-            t('দৈনিক, সাপ্তাহিক ও মাসিক রিপোর্ট।',
-                'Daily, weekly and monthly reports.'),
-          ),
-          _placeholder(
-            context,
-            Icons.settings_rounded,
-            t('সেটিংস', 'Settings'),
-            t('ভাষা, থিম, গোপনীয়তা ও মেস সেটিংস।',
-                'Language, theme, privacy and mess settings.'),
-          ),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (index) => setState(() => _tab = index),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.space_dashboard_outlined),
-            selectedIcon: const Icon(Icons.space_dashboard_rounded),
-            label: t('হোম', 'Home'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.receipt_long_outlined),
-            selectedIcon: const Icon(Icons.receipt_long_rounded),
-            label: t('হিসাব', 'Ledger'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.insert_chart_outlined_rounded),
-            selectedIcon: const Icon(Icons.insert_chart_rounded),
-            label: t('রিপোর্ট', 'Reports'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.settings_outlined),
-            selectedIcon: const Icon(Icons.settings_rounded),
-            label: t('সেটিংস', 'Settings'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _home(BuildContext context) {
-    final theme = Theme.of(context);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
-      children: [
-        Text(
-          t('আসসালামু আলাইকুম 👋', 'Welcome back 👋'),
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          t('আজকের মেসের সারাংশ', "Today's mess overview"),
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                theme.colorScheme.primary,
-                theme.colorScheme.primary.withValues(alpha: 0.78),
-              ],
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.account_balance_rounded,
-                      color: Colors.white70),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      t('মেসের বর্তমান ব্যালেন্স', 'Current mess balance'),
-                      style: const TextStyle(color: Colors.white70),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                t('৳ ১২,৪৫০', '৳ 12,450'),
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                t('ডেমো তথ্য • বাস্তব হিসাব সংযুক্ত নয়',
-                    'Demo data • live accounting not connected'),
-                style: const TextStyle(color: Colors.white70, fontSize: 11),
-              ),
+    final user = FirebaseAuth.instance.currentUser!;
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
+      builder: (context, profileSnapshot) {
+        final messId = profileSnapshot.data?.data()?['messId'] as String?;
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('HisabKhata', style: TextStyle(fontWeight: FontWeight.w800)),
+            actions: [
+              IconButton(onPressed: widget.onToggleTheme, icon: const Icon(Icons.dark_mode_outlined), tooltip: 'থিম বদলান'),
+              IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout_rounded), tooltip: 'লগআউট'),
             ],
           ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _summary(
-                context,
-                Icons.trending_down_rounded,
-                t('আজকের খরচ', "Today's expense"),
-                t('৳ ৭০০', '৳ 700'),
-                t('২টি লেনদেন', '2 transactions'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _summary(
-                context,
-                Icons.restaurant_rounded,
-                t('আজকের মিল', "Today's meals"),
-                '18',
-                t('৬ জন সদস্য', '6 members'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        FilledButton.icon(
-          onPressed: () => _addRecordSheet(context),
-          icon: const Icon(Icons.add_rounded),
-          label: Text(t('হিসাব যোগ করুন', 'Add record')),
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(52),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          ),
-        ),
-        const SizedBox(height: 22),
-        Text(
-          t('দ্রুত প্রবেশ', 'Quick access'),
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 10),
-        GridView.count(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.65,
-          children: [
-            _quickTile(context, Icons.receipt_long_rounded,
-                t('মেসের হিসাব', 'Mess ledger'), () => setState(() => _tab = 1)),
-            _quickTile(context, Icons.person_rounded,
-                t('ব্যক্তিগত হিসাব', 'Personal finance'),
-                () => _featureMessage(context, t('ব্যক্তিগত হিসাব', 'Personal finance'))),
-            _quickTile(context, Icons.restaurant_menu_rounded,
-                t('মিল ম্যানেজমেন্ট', 'Meal management'),
-                () => _featureMessage(context, t('মিল ম্যানেজমেন্ট', 'Meal management'))),
-            _quickTile(context, Icons.handshake_rounded,
-                t('ধার-দেনা', 'Loans'),
-                () => _featureMessage(context, t('ধার-দেনা', 'Loans'))),
-          ],
-        ),
-        const SizedBox(height: 22),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              t('সাম্প্রতিক লেনদেন', 'Recent transactions'),
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            TextButton(
-              onPressed: () => setState(() => _tab = 1),
-              child: Text(t('সব দেখুন', 'View all')),
-            ),
-          ],
-        ),
-        _transaction(
-          context,
-          Icons.shopping_basket_rounded,
-          t('সকালের বাজার', 'Morning groceries'),
-          t('আজ • আরমান', 'Today • Arman'),
-          t('− ৳ ৪৫০', '− ৳ 450'),
-        ),
-        _transaction(
-          context,
-          Icons.payments_rounded,
-          t('মেসে টাকা জমা', 'Mess deposit'),
-          t('আজ • রহিম', 'Today • Rahim'),
-          t('+ ৳ ১,০০০', '+ ৳ 1,000'),
-          positive: true,
-        ),
-      ],
-    );
-  }
-
-  Widget _summary(
-    BuildContext context,
-    IconData icon,
-    String title,
-    String value,
-    String note,
-  ) {
-    final theme = Theme.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(15),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: theme.colorScheme.primary),
-            const SizedBox(height: 10),
-            Text(title, style: theme.textTheme.bodySmall),
-            const SizedBox(height: 5),
-            Text(value,
-                style: theme.textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w900)),
-            const SizedBox(height: 3),
-            Text(note,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _quickTile(
-    BuildContext context,
-    IconData icon,
-    String label,
-    VoidCallback onTap,
-  ) {
-    final theme = Theme.of(context);
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(15),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          body: IndexedStack(
+            index: _tab,
             children: [
-              Icon(icon, color: theme.colorScheme.primary, size: 26),
-              Text(label,
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w700)),
+              _OverviewPage(userName: user.displayName ?? 'সদস্য', messId: messId),
+              LedgerPage(messId: messId, service: _service),
+              LoansPage(service: _service),
+              ReportsPage(messId: messId),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _transaction(
-    BuildContext context,
-    IconData icon,
-    String title,
-    String subtitle,
-    String amount, {
-    bool positive = false,
-  }) {
-    final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 9),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: theme.colorScheme.secondaryContainer,
-          child: Icon(icon, color: theme.colorScheme.onSecondaryContainer),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text(subtitle),
-        trailing: Text(
-          amount,
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            color: positive
-                ? theme.colorScheme.primary
-                : theme.colorScheme.error,
+          floatingActionButton: _tab == 1
+              ? FloatingActionButton.extended(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => AddTransactionDialog(messId: messId, service: _service),
+                  ),
+                  icon: const Icon(Icons.add),
+                  label: const Text('হিসাব যোগ করুন'),
+                )
+              : null,
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: _tab,
+            onDestinationSelected: (value) => setState(() => _tab = value),
+            destinations: const [
+              NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'হোম'),
+              NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'হিসাব'),
+              NavigationDestination(icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake), label: 'ধার-দেনা'),
+              NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'রিপোর্ট'),
+            ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _placeholder(
-    BuildContext context,
-    IconData icon,
-    String title,
-    String description,
-  ) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 52, color: theme.colorScheme.primary),
-            const SizedBox(height: 15),
-            Text(title,
-                style: theme.textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            Text(description, textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            Text(
-              t('পরবর্তী ধাপে এই মডিউলটি তৈরি হবে।',
-                  'This module will be implemented in a later phase.'),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _addRecordSheet(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.fromLTRB(22, 8, 22, 26),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              t('কোন হিসাব যোগ করবেন?', 'What would you like to add?'),
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
-            _actionChoice(
-              sheetContext,
-              Icons.shopping_basket_rounded,
-              t('মেসের খরচ', 'Mess expense'),
-              t('বাজার, ভাড়া, গ্যাস ইত্যাদি', 'Groceries, rent, gas, etc.'),
-            ),
-            _actionChoice(
-              sheetContext,
-              Icons.account_balance_wallet_rounded,
-              t('মেসে টাকা জমা', 'Mess deposit'),
-              t('সদস্যের জমা বা অবদান', 'Member contribution'),
-            ),
-            _actionChoice(
-              sheetContext,
-              Icons.person_rounded,
-              t('ব্যক্তিগত আয়-ব্যয়', 'Personal income/expense'),
-              t('ডিফল্টভাবে শুধু নিজের জন্য', 'Private to you by default'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _actionChoice(
-    BuildContext context,
-    IconData icon,
-    String title,
-    String subtitle,
-  ) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(child: Icon(icon)),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      onTap: () {
-        Navigator.pop(context);
-        _featureMessage(context, title);
+        );
       },
     );
   }
+}
 
-  void _featureMessage(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(t('$feature ফিচারটি পরবর্তী ধাপে তৈরি হবে।',
-            '$feature will be implemented in a later phase.')),
-      ),
+class _OverviewPage extends StatelessWidget {
+  const _OverviewPage({required this.userName, required this.messId});
+  final String userName;
+  final String? messId;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          Text('স্বাগতম, $userName 👋', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 5),
+          const Text('তোমার মেসের হিসাব ও ব্যক্তিগত অর্থের সারাংশ'),
+          const SizedBox(height: 18),
+          if (messId == null) const MessSetupCard() else MessSummaryCard(messId: messId!),
+          const SizedBox(height: 14),
+          const Card(child: ListTile(
+            leading: Icon(Icons.lock_outline_rounded),
+            title: Text('ব্যক্তিগত হিসাব ব্যক্তিগতই থাকবে'),
+            subtitle: Text('ব্যক্তিগত আয়-ব্যয় অন্য মেস সদস্যদের কাছে প্রকাশ করা হয় না।'),
+          )),
+          const Card(child: ListTile(
+            leading: Icon(Icons.sync_rounded),
+            title: Text('লাইভ সিঙ্ক'),
+            subtitle: Text('একই মেসের সদস্যরা অনলাইনে একই খাতা দেখতে পারবেন।'),
+          )),
+        ],
+      );
+}
+
+class MessSetupCard extends StatefulWidget {
+  const MessSetupCard({super.key});
+  @override
+  State<MessSetupCard> createState() => _MessSetupCardState();
+}
+
+class _MessSetupCardState extends State<MessSetupCard> {
+  final _name = TextEditingController();
+  final _code = TextEditingController();
+  bool _busy = false;
+  String? _message;
+  final _service = AccountingService();
+
+  Future<void> _create() async {
+    setState(() { _busy = true; _message = null; });
+    try {
+      final code = await _service.createMess(_name.text);
+      setState(() => _message = 'মেস তৈরি হয়েছে। ইনভাইট কোড: $code');
+    } catch (e) {
+      setState(() => _message = e.toString());
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  Future<void> _join() async {
+    setState(() { _busy = true; _message = null; });
+    try {
+      await _service.joinMess(_code.text);
+      setState(() => _message = 'মেসে যোগ দেওয়া হয়েছে।');
+    } catch (e) {
+      setState(() => _message = e.toString());
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  @override
+  void dispose() { _name.dispose(); _code.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('মেস তৈরি করুন অথবা যোগ দিন', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+            const SizedBox(height: 10),
+            TextField(controller: _name, decoration: const InputDecoration(labelText: 'নতুন মেসের নাম', border: OutlineInputBorder())),
+            const SizedBox(height: 8),
+            FilledButton(onPressed: _busy ? null : _create, child: const Text('নতুন মেস তৈরি')),
+            const Divider(height: 26),
+            TextField(controller: _code, decoration: const InputDecoration(labelText: 'মেস ইনভাইট কোড', border: OutlineInputBorder())),
+            const SizedBox(height: 8),
+            OutlinedButton(onPressed: _busy ? null : _join, child: const Text('কোড দিয়ে মেসে যোগ দিন')),
+            if (_message != null) SelectableText(_message!),
+          ]),
+        ),
+      );
+}
+
+class MessSummaryCard extends StatelessWidget {
+  const MessSummaryCard({super.key, required this.messId});
+  final String messId;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: AccountingService().messStream(messId),
+        builder: (context, snapshot) {
+          final data = snapshot.data?.data();
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.groups_rounded, size: 30),
+                const SizedBox(height: 8),
+                Text(data?['name'] as String? ?? 'তোমার মেস', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 5),
+                const Text('সদস্যদের আমন্ত্রণ জানাতে এই কোড শেয়ার করো:'),
+                SelectableText(data?['inviteCode'] as String? ?? 'লোড হচ্ছে…',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+              ]),
+            ),
+          );
+        },
+      );
+}
+
+class LedgerPage extends StatefulWidget {
+  const LedgerPage({super.key, required this.messId, required this.service});
+  final String? messId;
+  final AccountingService service;
+  @override
+  State<LedgerPage> createState() => _LedgerPageState();
+}
+
+class _LedgerPageState extends State<LedgerPage> {
+  bool _personal = false;
+
+  @override
+  Widget build(BuildContext context) => Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('মেসের খাতা'), icon: Icon(Icons.groups_outlined)),
+              ButtonSegment(value: true, label: Text('ব্যক্তিগত'), icon: Icon(Icons.person_outline)),
+            ],
+            selected: {_personal},
+            onSelectionChanged: (values) => setState(() => _personal = values.first),
+          ),
+        ),
+        Expanded(
+          child: _personal
+              ? StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: widget.service.personalTransactions(),
+                  builder: (context, snapshot) => _transactionList(context, snapshot.data?.docs ?? []),
+                )
+              : widget.messId == null
+                  ? const Center(child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text('মেসের খাতা দেখতে আগে হোম পেজ থেকে মেস তৈরি করুন বা যোগ দিন.', textAlign: TextAlign.center),
+                    ))
+                  : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: widget.service.messTransactions(widget.messId!),
+                      builder: (context, snapshot) => _transactionList(context, snapshot.data?.docs ?? []),
+                    ),
+        ),
+      ]);
+
+  Widget _transactionList(BuildContext context, List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    if (docs.isEmpty) return const Center(child: Text('এখনো কোনো হিসাব যোগ করা হয়নি।'));
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+      itemCount: docs.length,
+      itemBuilder: (context, index) {
+        final data = docs[index].data();
+        final kind = data['kind'] as String? ?? '';
+        final isIncome = kind == 'deposit' || kind == 'income';
+        final amount = ((data['amountMinor'] as num? ?? 0) / 100).toStringAsFixed(2);
+        final date = data['transactionDate'];
+        final dateText = date is Timestamp ? DateFormat('dd MMM yyyy').format(date.toDate()) : '';
+        return Card(
+          child: ListTile(
+            leading: CircleAvatar(child: Icon(isIncome ? Icons.south_west : Icons.north_east)),
+            title: Text(data['description'] as String? ?? data['category'] as String? ?? kind),
+            subtitle: Text('$dateText • ${data['category'] ?? kind}'),
+            trailing: Text('${isIncome ? '+' : '-'}৳$amount',
+                style: TextStyle(fontWeight: FontWeight.bold,
+                    color: isIncome ? Colors.green : Theme.of(context).colorScheme.error)),
+            onTap: () async {
+              final path = data['receiptStoragePath'] as String?;
+              if (path == null || path.isEmpty) return;
+              try {
+                final url = await widget.service.receiptUrl(path);
+                if (context.mounted) showDialog<void>(context: context, builder: (_) => AlertDialog(
+                  title: const Text('রসিদের ছবি'),
+                  content: SelectableText(url),
+                  actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('বন্ধ করুন'))],
+                ));
+              } catch (e) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('রসিদ খোলা যায়নি: $e')));
+              }
+            },
+          ),
+        );
+      },
     );
   }
+}
+
+class AddTransactionDialog extends StatefulWidget {
+  const AddTransactionDialog({super.key, required this.messId, required this.service});
+  final String? messId;
+  final AccountingService service;
+  @override
+  State<AddTransactionDialog> createState() => _AddTransactionDialogState();
+}
+
+class _AddTransactionDialogState extends State<AddTransactionDialog> {
+  final _amount = TextEditingController();
+  final _category = TextEditingController(text: 'বাজার');
+  final _description = TextEditingController();
+  String _kind = 'messExpense';
+  bool _personal = false;
+  bool _busy = false;
+  File? _receipt;
+  String? _error;
+
+  Future<void> _pickReceipt() async {
+    final image = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
+    if (image != null && mounted) setState(() => _receipt = File(image.path));
+  }
+
+  Future<void> _save() async {
+    final amount = double.tryParse(_amount.text.trim());
+    if (amount == null || amount <= 0) {
+      setState(() => _error = 'সঠিক টাকার পরিমাণ লিখুন।');
+      return;
+    }
+    if (!_personal && widget.messId == null) {
+      setState(() => _error = 'আগে একটি মেস তৈরি করুন অথবা যোগ দিন।');
+      return;
+    }
+    setState(() { _busy = true; _error = null; });
+    try {
+      String? receiptPath;
+      if (_receipt != null) {
+        receiptPath = await widget.service.uploadReceipt(
+          _receipt!, scope: _personal ? 'personal' : 'mess',
+        );
+      }
+      final minor = (amount * 100).round();
+      if (_personal) {
+        await widget.service.addPersonalTransaction(
+          kind: _kind == 'deposit' ? 'income' : 'expense',
+          amountMinor: minor,
+          category: _category.text,
+          description: _description.text,
+          transactionDate: DateTime.now(),
+          receiptPath: receiptPath,
+        );
+      } else {
+        await widget.service.addMessTransaction(
+          messId: widget.messId!,
+          kind: _kind,
+          amountMinor: minor,
+          category: _category.text,
+          description: _description.text,
+          transactionDate: DateTime.now(),
+          receiptPath: receiptPath,
+        );
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  void dispose() { _amount.dispose(); _category.dispose(); _description.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('নতুন হিসাব'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('ব্যক্তিগত হিসাব'),
+              value: _personal,
+              onChanged: (value) => setState(() { _personal = value; _kind = 'messExpense'; }),
+            ),
+            DropdownButtonFormField<String>(
+              value: _kind,
+              decoration: const InputDecoration(labelText: 'ধরন'),
+              items: (_personal
+                  ? const {'expense': 'ব্যক্তিগত খরচ', 'deposit': 'ব্যক্তিগত আয়'}
+                  : const {'messExpense': 'মেসের খরচ', 'memberPaidExpense': 'সদস্য নিজে খরচ করেছে', 'deposit': 'মেসে টাকা জমা'})
+                  .entries.map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+              onChanged: (value) => setState(() => _kind = value ?? 'messExpense'),
+            ),
+            const SizedBox(height: 10),
+            TextField(controller: _amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'টাকার পরিমাণ (৳)', border: OutlineInputBorder())),
+            const SizedBox(height: 10),
+            TextField(controller: _category, decoration: const InputDecoration(labelText: 'ক্যাটাগরি', border: OutlineInputBorder())),
+            const SizedBox(height: 10),
+            TextField(controller: _description, decoration: const InputDecoration(labelText: 'বিবরণ (ঐচ্ছিক)', border: OutlineInputBorder())),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(onPressed: _busy ? null : _pickReceipt,
+              icon: const Icon(Icons.add_a_photo_outlined),
+              label: Text(_receipt == null ? 'রসিদের ছবি যোগ করুন' : 'ছবি নির্বাচন করা হয়েছে')),
+            if (_error != null) Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: _busy ? null : () => Navigator.pop(context), child: const Text('বাতিল')),
+          FilledButton(onPressed: _busy ? null : _save, child: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator()) : const Text('সংরক্ষণ')),
+        ],
+      );
+}
+
+class LoansPage extends StatefulWidget {
+  const LoansPage({super.key, required this.service});
+  final AccountingService service;
+  @override
+  State<LoansPage> createState() => _LoansPageState();
+}
+
+class _LoansPageState extends State<LoansPage> {
+  Future<void> _addLoan() async {
+    final name = TextEditingController();
+    final amount = TextEditingController();
+    final notes = TextEditingController();
+    String direction = 'lent';
+    await showDialog<void>(context: context, builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('ধার-দেনা যোগ করুন'),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: name, decoration: const InputDecoration(labelText: 'ব্যক্তির নাম')),
+          TextField(controller: amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'টাকার পরিমাণ')),
+          DropdownButtonFormField<String>(
+            value: direction,
+            items: const [
+              DropdownMenuItem(value: 'lent', child: Text('আমি ধার দিয়েছি')),
+              DropdownMenuItem(value: 'borrowed', child: Text('আমি ধার নিয়েছি')),
+            ],
+            onChanged: (value) => setDialogState(() => direction = value ?? 'lent'),
+          ),
+          TextField(controller: notes, decoration: const InputDecoration(labelText: 'নোট (ঐচ্ছিক)')),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('বাতিল')),
+          FilledButton(onPressed: () async {
+            try {
+              final parsed = double.tryParse(amount.text.trim());
+              if (name.text.trim().isEmpty || parsed == null || parsed <= 0) {
+                throw ArgumentError('নাম ও সঠিক টাকার পরিমাণ দিন।');
+              }
+              await widget.service.addLoan(
+                counterpartyName: name.text,
+                direction: direction,
+                principalMinor: (parsed * 100).round(),
+                dueDate: null,
+                notes: notes.text,
+              );
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            } catch (e) {
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+            }
+          }, child: const Text('সংরক্ষণ')),
+        ],
+      ),
+    ));
+    name.dispose(); amount.dispose(); notes.dispose();
+  }
+
+  Future<void> _repay(String id, int remaining) async {
+    final amount = TextEditingController();
+    await showDialog<void>(context: context, builder: (dialogContext) => AlertDialog(
+      title: const Text('আংশিক পরিশোধ যোগ করুন'),
+      content: TextField(controller: amount, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'বাকি ৳$remaining')),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('বাতিল')),
+        FilledButton(onPressed: () async {
+          try {
+            final parsed = double.tryParse(amount.text.trim());
+            if (parsed == null || parsed <= 0) throw ArgumentError('সঠিক পরিমাণ দিন।');
+            await widget.service.addLoanRepayment(loanId: id, amountMinor: (parsed * 100).round());
+            if (dialogContext.mounted) Navigator.pop(dialogContext);
+          } catch (e) {
+            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+          }
+        }, child: const Text('পরিশোধ সংরক্ষণ')),
+      ],
+    ));
+    amount.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: widget.service.loans(),
+          builder: (context, snapshot) {
+            final docs = snapshot.data?.docs ?? [];
+            if (snapshot.hasError) return Center(child: Text('লোড করা যায়নি: ${snapshot.error}'));
+            if (docs.isEmpty) return const Center(child: Text('এখনো কোনো ধার-দেনা নেই।'));
+            return ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: docs.length,
+              itemBuilder: (context, index) {
+                final doc = docs[index];
+                final data = doc.data();
+                final principal = data['principalMinor'] as int? ?? 0;
+                final paid = data['paidMinor'] as int? ?? 0;
+                final remaining = principal - paid;
+                return Card(child: ListTile(
+                  leading: Icon(data['direction'] == 'lent' ? Icons.call_made : Icons.call_received),
+                  title: Text(data['counterpartyName'] as String? ?? 'নাম নেই'),
+                  subtitle: Text('${data['direction'] == 'lent' ? 'ধার দিয়েছেন' : 'ধার নিয়েছেন'} • পরিশোধ ৳${(paid / 100).toStringAsFixed(2)} • বাকি ৳${(remaining / 100).toStringAsFixed(2)}'),
+                  trailing: remaining > 0 ? IconButton(icon: const Icon(Icons.payments_outlined), onPressed: () => _repay(doc.id, remaining)) : const Icon(Icons.check_circle, color: Colors.green),
+                ));
+              },
+            );
+          },
+        ),
+        floatingActionButton: FloatingActionButton.extended(onPressed: _addLoan, icon: const Icon(Icons.add), label: const Text('ধার-দেনা যোগ')),
+      );
+}
+
+class ReportsPage extends StatefulWidget {
+  const ReportsPage({super.key, required this.messId});
+  final String? messId;
+  @override
+  State<ReportsPage> createState() => _ReportsPageState();
+}
+
+class _ReportsPageState extends State<ReportsPage> {
+  bool _personal = false;
+  bool _busy = false;
+  String? _message;
+  final _reports = ReportService();
+
+  Future<List<Map<String, dynamic>>> _fetchRows() async {
+    final user = FirebaseAuth.instance.currentUser!;
+    final query = _personal
+        ? FirebaseFirestore.instance.collection('users').doc(user.uid).collection('personalTransactions')
+        : widget.messId == null
+            ? null
+            : FirebaseFirestore.instance.collection('messes').doc(widget.messId).collection('transactions');
+    if (query == null) return [];
+    final result = await query.orderBy('transactionDate', descending: true).get();
+    return result.docs.map((doc) => doc.data()).toList();
+  }
+
+  Future<void> _export(bool excel) async {
+    setState(() { _busy = true; _message = null; });
+    try {
+      final rows = await _fetchRows();
+      if (rows.isEmpty) throw StateError('রিপোর্টে কোনো হিসাব নেই।');
+      final title = _personal ? 'personal-finance-report' : 'mess-ledger-report';
+      final file = excel
+          ? await _reports.exportExcel(rows, title: title)
+          : await _reports.exportPdf(rows, title: title);
+      await _reports.shareFile(file);
+      setState(() => _message = 'রিপোর্ট তৈরি হয়েছে: ${file.path.split('/').last}');
+    } catch (e) {
+      setState(() => _message = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          Text('রিপোর্ট এক্সপোর্ট', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          const Text('লেনদেন থেকে PDF বা Excel (.xlsx) রিপোর্ট তৈরি করে শেয়ার করুন।'),
+          const SizedBox(height: 18),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('মেসের হিসাব')),
+              ButtonSegment(value: true, label: Text('ব্যক্তিগত হিসাব')),
+            ],
+            selected: {_personal},
+            onSelectionChanged: (values) => setState(() => _personal = values.first),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(onPressed: _busy ? null : () => _export(false), icon: const Icon(Icons.picture_as_pdf), label: const Text('PDF তৈরি করুন')),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(onPressed: _busy ? null : () => _export(true), icon: const Icon(Icons.table_chart), label: const Text('Excel (.xlsx) তৈরি করুন')),
+          if (_busy) const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
+          if (_message != null) SelectableText(_message!),
+          const SizedBox(height: 18),
+          const Card(child: ListTile(
+            leading: Icon(Icons.info_outline),
+            title: Text('রিপোর্টে লেনদেনের তালিকা থাকে'),
+            subtitle: Text('বর্তমান সংস্করণে মাসভিত্তিক ফিল্টার ও meal-rate summary পরবর্তী ধাপে যোগ হবে।'),
+          )),
+        ],
+      );
 }
