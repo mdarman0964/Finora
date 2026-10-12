@@ -9,11 +9,8 @@ void main() {
       memberUids: members,
       transactions: [
         {
-          'kind': 'messExpense',
-          'status': 'posted',
-          'amountMinor': 1000,
-          'paidByUid': 'member-a',
-          'memberUidsAtPosting': members,
+          'kind': 'messExpense', 'status': 'posted', 'amountMinor': 1000,
+          'paidByUid': 'member-a', 'memberUidsAtPosting': members,
           'splitStrategy': 'fixed',
           'allocations': {'member-a': 700, 'member-b': 300},
           'transactionDate': DateTime(2026, 10, 1),
@@ -30,11 +27,8 @@ void main() {
       memberUids: members,
       transactions: [
         {
-          'kind': 'messExpense',
-          'status': 'posted',
-          'amountMinor': 1000,
-          'paidByUid': 'member-a',
-          'memberUidsAtPosting': members,
+          'kind': 'messExpense', 'status': 'posted', 'amountMinor': 1000,
+          'paidByUid': 'member-a', 'memberUidsAtPosting': members,
           'splitStrategy': 'percentage',
           'splitWeights': {'member-a': 2500, 'member-b': 7500},
           'transactionDate': DateTime(2026, 10, 1),
@@ -51,13 +45,9 @@ void main() {
       memberUids: members,
       transactions: [
         {
-          'kind': 'messExpense',
-          'status': 'pending',
-          'amountMinor': 1000,
-          'paidByUid': 'member-a',
-          'memberUidsAtPosting': members,
-          'splitStrategy': 'equal',
-          'transactionDate': DateTime(2026, 10, 1),
+          'kind': 'messExpense', 'status': 'pending', 'amountMinor': 1000,
+          'paidByUid': 'member-a', 'memberUidsAtPosting': members,
+          'splitStrategy': 'equal', 'transactionDate': DateTime(2026, 10, 1),
         },
       ],
       meals: const [],

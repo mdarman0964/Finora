@@ -302,11 +302,11 @@ class AccountingService {
     if (!{'equal', 'meals', 'payer', 'fixed', 'percentage'}.contains(effectiveSplit)) throw ArgumentError('খরচ ভাগের নিয়মটি সঠিক নয়।');
     if (effectiveSplit == 'fixed') {
       if (messData['ownerUid'] != user.uid) throw StateError('Custom split শুধু মেস ম্যানেজার নির্ধারণ করতে পারবেন।');
-      if (allocations == null || allocations.keys.any((uid) => !memberUidsAtPosting.contains(uid)) || allocations.values.any((value) => value < 0) || allocations.values.fold<int>(0, (sum, value) => sum + value) != amountMinor) throw ArgumentError('সদস্যদের নির্দিষ্ট অঙ্কের যোগফল মোট খরচের সমান হতে হবে।');
+      if (allocations == null || allocations.keys.any((uid) => !memberUidsAtPosting.contains(uid)) || allocations.values.any((value) => value < 0) || allocations.values.fold<int>(0, (total, value) => total + value) != amountMinor) throw ArgumentError('সদস্যদের নির্দিষ্ট অঙ্কের যোগফল মোট খরচের সমান হতে হবে।');
     }
     if (effectiveSplit == 'percentage') {
       if (messData['ownerUid'] != user.uid) throw StateError('Custom split শুধু মেস ম্যানেজার নির্ধারণ করতে পারবেন।');
-      if (splitWeights == null || splitWeights.keys.any((uid) => !memberUidsAtPosting.contains(uid)) || splitWeights.values.any((value) => value < 0) || splitWeights.values.fold<int>(0, (sum, value) => sum + value) != 10000) throw ArgumentError('শতাংশের যোগফল ১০০% হতে হবে।');
+      if (splitWeights == null || splitWeights.keys.any((uid) => !memberUidsAtPosting.contains(uid)) || splitWeights.values.any((value) => value < 0) || splitWeights.values.fold<int>(0, (total, value) => total + value) != 10000) throw ArgumentError('শতাংশের যোগফল ১০০% হতে হবে।');
     }
     final isExpense = kind == 'messExpense' || kind == 'memberPaidExpense';
     await messRef.collection('transactions').add({

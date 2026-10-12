@@ -56,7 +56,7 @@ describe('Finora Firestore security rules', function () {
       createdBy: uid,
       splitStrategy: 'equal',
       mealEligible: true,
-      status: kind === 'deposit' ? 'posted' : 'pending',
+      status: 'pending',
     };
   }
 
