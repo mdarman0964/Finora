@@ -19,6 +19,8 @@ In GitHub, open **Settings → Secrets and variables → Actions → New reposit
 - `FIREBASE_PROJECT_ID`
 - `FIREBASE_IOS_APP_ID` (required for a working iOS app; use the registered iOS Firebase app ID)
 - `FIREBASE_IOS_BUNDLE_ID` (required for iOS; for this project use `com.finora.finora` unless you deliberately register a different bundle ID)
+- `GOOGLE_SERVER_CLIENT_ID` (the Google Cloud **Web application** OAuth client ID for Drive API access)
+- `GOOGLE_IOS_CLIENT_ID` (the Google Cloud **iOS** OAuth client ID; required for Google Sign-In on iOS)
 
 Optional for web builds: `FIREBASE_AUTH_DOMAIN`. Register the iOS app in the same Firebase project and supply both iOS values before using the app on an iPhone or iPad.
 
@@ -47,7 +49,9 @@ For a local build, provide the same `--dart-define` values to `flutter build apk
 - Email/password registration and login use Firebase Authentication.
 - Mess records and personal transactions are stored in Firestore; Firestore snapshots provide live synchronization.
 - Receipt images are uploaded to the signed-in user's Google Drive. Mess receipt files are shared with the Google account emails recorded in the mess member profiles; each member must open the app at least once after this update so their email can be added to the shared profile.
-- Google Drive OAuth requires enabling the Google Drive API in Google Cloud Console, configuring an OAuth consent screen, creating a Web application OAuth client ID, and registering the Android app's package/signing SHA-1 as an Android OAuth client. Add the Web client ID as GitHub Actions secret `GOOGLE_SERVER_CLIENT_ID`. The app requests the `drive.file` scope and creates receipt files in the signed-in user's Drive.
+- Google Drive OAuth requires enabling the Google Drive API in Google Cloud Console, configuring an OAuth consent screen, creating a Web application OAuth client ID, and registering the Android app's package/signing SHA-1 as an Android OAuth client. Add the Web client ID as GitHub Actions secret `GOOGLE_SERVER_CLIENT_ID`.
+- For iOS, create an iOS OAuth client ID for the registered bundle ID and add it as `GOOGLE_IOS_CLIENT_ID`. The iOS workflow writes the client ID and its reversed URL scheme into the generated `Info.plist`. The unsigned iOS CI build is only a compile check; actual sign-in still needs a real device test.
+- The CI workflow generates platform folders on each run. For reliable Android Google Sign-In, use a stable signing certificate and register its SHA-1 with the matching Android OAuth client; a CI-generated debug signing key can change between runs. The app requests the `drive.file` scope and creates receipt files in the signed-in user's Drive.
 - The Google account used for Drive access may differ from the email/password account used for Finora. Mess receipt sharing only works if the email in the member profile matches a Google account the member can access.
 - Loans and repayment events are stored under the signed-in user's private path.
 - Daily per-member meal counts are stored under each mess; the same member can update their count for a given day.
