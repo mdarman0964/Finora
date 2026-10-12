@@ -497,11 +497,20 @@ class _LedgerPageState extends State<LedgerPage> {
               if (path == null || path.isEmpty) return;
               try {
                 final url = await widget.service.receiptUrl(path);
-                if (context.mounted) showDialog<void>(context: context, builder: (_) => AlertDialog(
-                  title: const Text('রসিদের ছবি'),
-                  content: SelectableText(url),
-                  actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('বন্ধ করুন'))],
-                ));
+                if (mounted) {
+                  showDialog<void>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: const Text('রসিদের ছবি'),
+                      content: Image.network(url, errorBuilder: (_, __, ___) =>
+                          SelectableText(url)),
+                      actions: [TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: const Text('বন্ধ করুন'),
+                      )],
+                    ),
+                  );
+                }
               } catch (e) {
                 if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('রসিদ খোলা যায়নি: $e')));
               }
@@ -673,7 +682,11 @@ class _LoansPageState extends State<LoansPage> {
               );
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             } catch (e) {
-              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(e.toString())),
+                );
+              }
             }
           }, child: const Text('সংরক্ষণ')),
         ],
@@ -696,7 +709,11 @@ class _LoansPageState extends State<LoansPage> {
             await widget.service.addLoanRepayment(loanId: id, amountMinor: (parsed * 100).round());
             if (dialogContext.mounted) Navigator.pop(dialogContext);
           } catch (e) {
-            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(e.toString())),
+              );
+            }
           }
         }, child: const Text('পরিশোধ সংরক্ষণ')),
       ],
