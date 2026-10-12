@@ -22,3 +22,8 @@ All documents should include `createdAt`, `updatedAt`, and `createdBy` where app
 
 ## Security note
 This is a draft, not a production schema. Enforce authorization in Firestore rules, validate totals/splits in trusted code, and test rules with the Firebase Emulator before real data is enabled.
+
+
+## Month closure protection
+
+New mess transaction documents include `monthKey` in `YYYY-MM` format, and meal documents include both `dateKey` (`YYYY-MM-DD`) and `monthKey`. Firestore rules reject writes when a matching `monthClosures/{monthKey}` document exists. The accounting service also checks the closure before writing to show a clear Bengali error message; the server rules remain the enforcement boundary.

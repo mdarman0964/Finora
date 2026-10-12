@@ -61,3 +61,15 @@ For a local build, provide the same `--dart-define` values to `flutter build apk
 - The iOS workflow validates an unsigned iOS build on macOS. An unsigned build is not ready for TestFlight/App Store distribution; signing and Apple developer configuration are still required.
 - Personal finance is private by default. Do not add personal transaction data to shared mess collections.
 - This is an initial implementation. Test rules and multi-user access with two test accounts before using real financial records.
+
+
+## Firestore rules regression tests
+
+The repository runs the Firestore emulator rules tests through GitHub Actions (`Firestore Rules Tests`). To run locally, install Node.js 20+, Java 17+, and npm dependencies, then run:
+
+```bash
+npm install
+npx --yes firebase-tools emulators:exec --only firestore --project demo-finora-rules "npm test"
+```
+
+The tests verify that closed months reject new ledger transactions and meal changes, open months accept valid writes, and a member cannot read another user's private document. The app stores a `monthKey` (`YYYY-MM`) on every new mess transaction and meal entry; do not remove this field from client writes.
