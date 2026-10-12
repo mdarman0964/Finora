@@ -51,8 +51,7 @@ class AccountingService {
     });
     await ref.collection('members').doc(uid).set({
       'uid': uid,
-      'displayName': user.displayName ?? user.email ?? 'Member',
-      'email': user.email,
+      'displayName': user.displayName ?? 'Member',
       'joinedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
