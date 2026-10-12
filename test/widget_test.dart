@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:finora/main.dart';
 import 'package:finora/services/balance_calculator.dart';
+import 'package:finora/services/settlement_calculator.dart';
 
 void main() {
   testWidgets('shows setup guidance when Firebase values are not configured',
@@ -9,6 +10,31 @@ void main() {
     await tester.pump();
     expect(find.text('Firebase সেটআপ প্রয়োজন'), findsOneWidget);
     expect(find.text('https://console.firebase.google.com/'), findsOneWidget);
+  });
+
+
+  group('SettlementCalculator', () {
+    test('minimizes transfers while preserving the exact total', () {
+      final transfers = SettlementCalculator.calculate({
+        'a': 700,
+        'b': -500,
+        'c': -200,
+      });
+
+      expect(transfers.length, 2);
+      expect(transfers.map((t) => t.amountMinor).reduce((a, b) => a + b), 700);
+      expect(transfers.every((t) => t.amountMinor > 0), isTrue);
+      expect(transfers.map((t) => t.fromUid).toSet(), {'b', 'c'});
+      expect(transfers.map((t) => t.toUid).toSet(), {'a'});
+    });
+
+    test('does not suggest settlement when balances do not net to zero', () {
+      expect(SettlementCalculator.calculate({'a': 100, 'b': -50}), isEmpty);
+    });
+
+    test('returns no transfers when everyone is even', () {
+      expect(SettlementCalculator.calculate({'a': 0, 'b': 0}), isEmpty);
+    });
   });
 
   group('BalanceCalculator', () {
