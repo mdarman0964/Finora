@@ -1101,6 +1101,96 @@ class _ReportsPageState extends State<ReportsPage> {
     }).toList();
   }
 
+  Future<void> _closeSelectedMonth() async {
+    if (_personal || widget.messId == null) {
+      setState(() => _message = 'মেসের মাস বন্ধ করতে মেসের হিসাব নির্বাচন করুন।');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('মাসের হিসাব বন্ধ করবেন?'),
+        content: Text(
+          '${DateFormat('MMMM yyyy').format(_selectedMonth)} মাসের হিসাবের ব্যালেন্স snapshot সংরক্ষণ হবে। একই মাস দ্বিতীয়বার বন্ধ করা যাবে না।',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('বাতিল')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('হিসাব বন্ধ করুন')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() { _busy = true; _message = null; });
+    try {
+      final messRef = FirebaseFirestore.instance.collection('messes').doc(widget.messId);
+      final messSnapshot = await messRef.get();
+      final mess = messSnapshot.data();
+      if (mess == null) throw StateError('মেসের তথ্য পাওয়া যায়নি।');
+      if (mess['ownerUid'] != FirebaseAuth.instance.currentUser?.uid) {
+        throw StateError('শুধু মেসের মালিক মাসের হিসাব বন্ধ করতে পারবেন।');
+      }
+
+      final transactionSnapshot = await messRef.collection('transactions').get();
+      final mealSnapshot = await messRef.collection('meals').get();
+      final selectedKey = '${_selectedMonth.year.toString().padLeft(4, '0')}-${_selectedMonth.month.toString().padLeft(2, '0')}';
+      final cutoff = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+      final allThroughMonth = transactionSnapshot.docs.map((doc) => doc.data()).where((row) {
+        final date = row['transactionDate'];
+        return date is Timestamp && date.toDate().isBefore(cutoff);
+      }).toList();
+      final mealsThroughMonth = mealSnapshot.docs.map((doc) => doc.data()).where((row) {
+        final dateKey = row['dateKey'] as String? ?? '';
+        return dateKey.compareTo(selectedKey) <= 0;
+      }).toList();
+      final memberUids = (mess['memberUids'] as List<dynamic>? ?? const []).whereType<String>().toList();
+      final balances = BalanceCalculator.calculate(
+        memberUids: memberUids,
+        transactions: allThroughMonth,
+        meals: mealsThroughMonth,
+      );
+      final selectedTransactions = allThroughMonth.where((row) {
+        final date = row['transactionDate'] as Timestamp;
+        final value = date.toDate();
+        return value.year == _selectedMonth.year && value.month == _selectedMonth.month
+            && (row['status'] == null || row['status'] == 'posted');
+      }).toList();
+      var totalMeals = 0;
+      for (final row in mealsThroughMonth) {
+        if ((row['dateKey'] as String? ?? '').startsWith(selectedKey)) {
+          totalMeals += (row['count'] as num?)?.toInt() ?? 0;
+        }
+      }
+      var eligibleExpense = 0;
+      var income = 0;
+      var expense = 0;
+      for (final row in selectedTransactions) {
+        final amount = (row['amountMinor'] as num?)?.toInt() ?? 0;
+        final kind = row['kind'] as String? ?? '';
+        if (kind == 'deposit' || kind == 'income') {
+          income += amount;
+        } else if (kind == 'messExpense' || kind == 'memberPaidExpense') {
+          expense += amount;
+          if (row['mealEligible'] == true) eligibleExpense += amount;
+        }
+      }
+      await AccountingService().closeMessMonth(
+        messId: widget.messId!,
+        month: _selectedMonth,
+        balanceSnapshot: balances,
+        totalMeals: totalMeals,
+        mealEligibleExpenseMinor: eligibleExpense,
+        incomeMinor: income,
+        expenseMinor: expense,
+      );
+      if (mounted) setState(() => _message = '$selectedKey মাসের closing balance সংরক্ষণ হয়েছে। পরবর্তী মাসের ব্যালেন্সে এই snapshot থেকে carry-forward করা হবে।');
+    } catch (e) {
+      if (mounted) setState(() => _message = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _export(bool excel) async {
     setState(() { _busy = true; _message = null; });
     try {
@@ -1151,6 +1241,14 @@ class _ReportsPageState extends State<ReportsPage> {
           FilledButton.icon(onPressed: _busy ? null : () => _export(false), icon: const Icon(Icons.picture_as_pdf), label: const Text('PDF তৈরি করুন')),
           const SizedBox(height: 8),
           OutlinedButton.icon(onPressed: _busy ? null : () => _export(true), icon: const Icon(Icons.table_chart), label: const Text('Excel (.xlsx) তৈরি করুন')),
+          if (!_personal && widget.messId != null) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _closeSelectedMonth,
+              icon: const Icon(Icons.lock_clock_outlined),
+              label: const Text('নির্বাচিত মাস বন্ধ ও carry-forward'),
+            ),
+          ],
           if (_busy) const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
           if (_message != null) SelectableText(_message!),
           const SizedBox(height: 18),
