@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
@@ -157,6 +158,34 @@ class _AuthPageState extends State<AuthPage> {
   bool _busy = false;
   String? _error;
 
+  Future<void> _signInWithGoogle() async {
+    setState(() { _busy = true; _error = null; });
+    try {
+      final googleUser = await GoogleSignIn(scopes: const ['email']).signIn();
+      if (googleUser == null) return;
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      final result = await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = result.user;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'displayName': user.displayName ?? '',
+          'email': user.email,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = e.message ?? e.code);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _submit() async {
     setState(() { _busy = true; _error = null; });
     try {
@@ -239,6 +268,12 @@ class _AuthPageState extends State<AuthPage> {
                     FilledButton(
                       onPressed: _busy ? null : _submit,
                       child: _busy ? const CircularProgressIndicator() : Text(_register ? 'অ্যাকাউন্ট তৈরি করুন' : 'লগইন'),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _signInWithGoogle,
+                      icon: const Icon(Icons.g_mobiledata_rounded, size: 28),
+                      label: const Text('Google দিয়ে চালিয়ে যান'),
                     ),
                     TextButton(
                       onPressed: _busy ? null : () => setState(() { _register = !_register; _error = null; }),
