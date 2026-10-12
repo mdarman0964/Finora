@@ -50,6 +50,28 @@ class BalanceCalculator {
     return Map.unmodifiable(balances);
   }
 
+  /// Applies post-close transactions to a cumulative closing snapshot.
+  static Map<String, int> carryForward({
+    required Map<String, int> openingBalances,
+    required List<String> memberUids,
+    required List<Map<String, dynamic>> laterTransactions,
+    required List<Map<String, dynamic>> meals,
+  }) {
+    final result = <String, int>{...openingBalances};
+    for (final uid in memberUids) {
+      result.putIfAbsent(uid, () => 0);
+    }
+    final delta = calculate(
+      memberUids: memberUids,
+      transactions: laterTransactions,
+      meals: meals,
+    );
+    for (final entry in delta.entries) {
+      result[entry.key] = (result[entry.key] ?? 0) + entry.value;
+    }
+    return Map.unmodifiable(result);
+  }
+
   static Map<String, int> _mealWeightsFor(
     dynamic transactionDate,
     List<Map<String, dynamic>> meals,
