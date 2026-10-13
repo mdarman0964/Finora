@@ -207,7 +207,7 @@ class _AuthPageState extends State<AuthPage> {
       case 'email-already-in-use':
         return 'এই ইমেইলে আগে থেকেই অ্যাকাউন্ট আছে। লগইন করুন।';
       case 'weak-password':
-        return 'আরও শক্তিশালী পাসওয়ার্ড দিন (কমপক্ষে ৬ অক্ষর)।';
+        return 'পাসওয়ার্ডে অন্তত ৮ অক্ষর, বড়/ছোট ইংরেজি অক্ষর, সংখ্যা ও বিশেষ চিহ্ন থাকতে হবে।';
       case 'invalid-email':
         return 'ইমেইল ঠিকানাটি সঠিক নয়।';
       case 'user-not-found':
