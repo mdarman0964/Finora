@@ -474,12 +474,12 @@ class _DashboardPageState extends State<DashboardPage> {
             selectedIndex: _tab < 6 ? _tab : 0,
             onDestinationSelected: (value) => setState(() => _tab = value),
             destinations: [
-              NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: widget.english ? 'Home' : 'হোম'),
-              NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: widget.english ? 'Ledger' : 'হিসাব'),
-              NavigationDestination(icon: Icon(Icons.restaurant_outlined), selectedIcon: Icon(Icons.restaurant), label: widget.english ? 'Meals' : 'মিল'),
-              NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: widget.english ? 'Balances' : 'ব্যালেন্স'),
-              NavigationDestination(icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake), label: widget.english ? 'Loans' : 'ধার-দেনা'),
-              NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: widget.english ? 'Reports' : 'রিপোর্ট'),
+              NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home), label: widget.english ? 'Home' : 'হোম'),
+              NavigationDestination(icon: const Icon(Icons.receipt_long_outlined), selectedIcon: const Icon(Icons.receipt_long), label: widget.english ? 'Ledger' : 'হিসাব'),
+              NavigationDestination(icon: const Icon(Icons.restaurant_outlined), selectedIcon: const Icon(Icons.restaurant), label: widget.english ? 'Meals' : 'মিল'),
+              NavigationDestination(icon: const Icon(Icons.account_balance_wallet_outlined), selectedIcon: const Icon(Icons.account_balance_wallet), label: widget.english ? 'Balances' : 'ব্যালেন্স'),
+              NavigationDestination(icon: const Icon(Icons.handshake_outlined), selectedIcon: const Icon(Icons.handshake), label: widget.english ? 'Loans' : 'ধার-দেনা'),
+              NavigationDestination(icon: const Icon(Icons.bar_chart_outlined), selectedIcon: const Icon(Icons.bar_chart), label: widget.english ? 'Reports' : 'রিপোর্ট'),
             ],
           ),
         );
