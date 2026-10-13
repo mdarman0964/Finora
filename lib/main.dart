@@ -23,6 +23,7 @@ class FinoraApp extends StatefulWidget {
 class _FinoraAppState extends State<FinoraApp> {
   late final Future<void> _boot = _initialize();
   ThemeMode _themeMode = ThemeMode.light;
+  bool _english = false;
 
   Future<void> _initialize() async {
     if (FirebaseOptionsConfig.isConfigured) {
@@ -62,6 +63,8 @@ class _FinoraAppState extends State<FinoraApp> {
                     ? ThemeMode.dark
                     : ThemeMode.light;
               }),
+              english: _english,
+              onToggleLanguage: () => setState(() => _english = !_english),
             );
           },
         ),
@@ -128,8 +131,10 @@ class FirebaseSetupPage extends StatelessWidget {
 }
 
 class AuthGate extends StatelessWidget {
-  const AuthGate({super.key, required this.onToggleTheme});
+  const AuthGate({super.key, required this.onToggleTheme, required this.english, required this.onToggleLanguage});
   final VoidCallback onToggleTheme;
+  final bool english;
+  final VoidCallback onToggleLanguage;
 
   @override
   Widget build(BuildContext context) => StreamBuilder<User?>(
@@ -138,8 +143,12 @@ class AuthGate extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(body: Center(child: CircularProgressIndicator()));
           }
-          if (snapshot.data == null) return const AuthPage();
-          return DashboardPage(onToggleTheme: onToggleTheme);
+          final user = snapshot.data;
+          if (user == null) return const AuthPage();
+          if (user.providerData.any((p) => p.providerId == 'password') && !user.emailVerified) {
+            return const VerifyEmailPage();
+          }
+          return DashboardPage(onToggleTheme: onToggleTheme, english: english, onToggleLanguage: onToggleLanguage);
         },
       );
 }
@@ -156,6 +165,7 @@ class _AuthPageState extends State<AuthPage> {
   final _name = TextEditingController();
   bool _register = false;
   bool _busy = false;
+  bool _showPassword = false;
   String? _error;
 
   Future<void> _signInWithGoogle() async {
@@ -206,9 +216,22 @@ class _AuthPageState extends State<AuthPage> {
         return 'ইমেইল বা পাসওয়ার্ড সঠিক নয়।';
       case 'network-request-failed':
         return 'ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।';
+      case 'too-many-requests':
+        return 'অনেকবার চেষ্টা করা হয়েছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।';
+      case 'user-disabled':
+        return 'এই অ্যাকাউন্টটি বন্ধ করা হয়েছে। অ্যাপ পরিচালকের সঙ্গে যোগাযোগ করুন।';
       default:
         return e.message ?? e.code;
     }
+  }
+
+  String? _validatePassword(String password) {
+    if (password.length < 8) return 'পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে।';
+    if (!RegExp(r'[A-Z]').hasMatch(password)) return 'পাসওয়ার্ডে অন্তত একটি বড় ইংরেজি অক্ষর (A–Z) দিন।';
+    if (!RegExp(r'[a-z]').hasMatch(password)) return 'পাসওয়ার্ডে অন্তত একটি ছোট ইংরেজি অক্ষর (a–z) দিন।';
+    if (!RegExp(r'\\d').hasMatch(password)) return 'পাসওয়ার্ডে অন্তত একটি সংখ্যা দিন।';
+    if (!RegExp(r'[^A-Za-z0-9]').hasMatch(password)) return 'পাসওয়ার্ডে অন্তত একটি বিশেষ চিহ্ন দিন (যেমন !@#)।';
+    return null;
   }
 
   Future<void> _submit() async {
@@ -220,9 +243,11 @@ class _AuthPageState extends State<AuthPage> {
       setState(() => _error = 'সঠিক ইমেইল ঠিকানা লিখুন।');
       return;
     }
-    if (_password.text.length < 6) {
-      setState(() => _error = 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।');
-      return;
+    if (_register) {
+      final passwordError = _validatePassword(_password.text);
+      if (passwordError != null) { setState(() => _error = passwordError); return; }
+    } else if (_password.text.isEmpty) {
+      setState(() => _error = 'পাসওয়ার্ড লিখুন.'); return;
     }
     setState(() { _busy = true; _error = null; });
     try {
@@ -234,11 +259,21 @@ class _AuthPageState extends State<AuthPage> {
           password: _password.text,
         );
         await result.user?.updateDisplayName(_name.text.trim());
+        await result.user?.sendEmailVerification();
+        await auth.signOut();
+        if (mounted) setState(() => _error = 'অ্যাকাউন্ট তৈরি হয়েছে। লগইনের আগে ইমেইলে পাঠানো verification link খুলে ইমেইল যাচাই করুন।');
+        return;
       } else {
         result = await auth.signInWithEmailAndPassword(
           email: _email.text.trim(),
           password: _password.text,
         );
+        if (result.user != null && !result.user!.emailVerified) {
+          await result.user!.sendEmailVerification();
+          await auth.signOut();
+          if (mounted) setState(() => _error = 'আপনার ইমেইল এখনো যাচাই করা হয়নি। নতুন verification link পাঠানো হয়েছে—ইমেইল যাচাই করে আবার লগইন করুন।');
+          return;
+        }
       }
       final user = result.user;
       if (user != null) {
@@ -294,8 +329,15 @@ class _AuthPageState extends State<AuthPage> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _password,
-                      obscureText: true,
-                      decoration: const InputDecoration(labelText: 'পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)', border: OutlineInputBorder()),
+                      obscureText: !_showPassword,
+                      decoration: InputDecoration(
+                        labelText: _register ? 'পাসওয়ার্ড (৮+ অক্ষর, বড়/ছোট অক্ষর, সংখ্যা ও চিহ্ন)' : 'পাসওয়ার্ড',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(() => _showPassword = !_showPassword),
+                          icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+                        ),
+                      ),
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 10),
@@ -326,8 +368,10 @@ class _AuthPageState extends State<AuthPage> {
 }
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key, required this.onToggleTheme});
+  const DashboardPage({super.key, required this.onToggleTheme, required this.english, required this.onToggleLanguage});
   final VoidCallback onToggleTheme;
+  final bool english;
+  final VoidCallback onToggleLanguage;
   @override
   State<DashboardPage> createState() => _DashboardPageState();
 }
@@ -348,30 +392,10 @@ class _DashboardPageState extends State<DashboardPage> {
             title: const Text('Finora', style: TextStyle(fontWeight: FontWeight.w800)),
             actions: [
               IconButton(
-                onPressed: () => showAboutDialog(
-                  context: context,
-                  applicationName: 'Finora',
-                  applicationVersion: '1.0.0',
-                  applicationIcon: const Icon(Icons.account_balance_wallet_rounded, size: 36),
-                  children: const [
-                    SizedBox(height: 12),
-                    Text('Developed by Md Arman'),
-                    SizedBox(height: 8),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.email_outlined, size: 18),
-                        SizedBox(width: 8),
-                        Flexible(child: SelectableText('mdarman0964@gmail.com')),
-                      ],
-                    ),
-                  ],
-                ),
-                icon: const Icon(Icons.info_outline_rounded),
-                tooltip: 'অ্যাপ সম্পর্কে',
+                onPressed: () => setState(() => _tab = 6),
+                icon: const Icon(Icons.settings_outlined),
+                tooltip: english ? 'Settings' : 'সেটিংস',
               ),
-              IconButton(onPressed: widget.onToggleTheme, icon: const Icon(Icons.dark_mode_outlined), tooltip: 'থিম বদলান'),
-              IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout_rounded), tooltip: 'লগআউট'),
             ],
           ),
           drawer: NavigationDrawer(
@@ -396,6 +420,7 @@ class _DashboardPageState extends State<DashboardPage> {
               const NavigationDrawerDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: Text('সদস্যদের ব্যালেন্স')),
               const NavigationDrawerDestination(icon: Icon(Icons.handshake_outlined), label: Text('ধার-দেনা ও পরিশোধ')),
               const NavigationDrawerDestination(icon: Icon(Icons.bar_chart_outlined), label: Text('PDF / Excel রিপোর্ট')),
+              NavigationDrawerDestination(icon: const Icon(Icons.settings_outlined), label: Text(english ? 'Settings' : 'সেটিংস')),
               const Divider(indent: 20, endIndent: 20),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -408,17 +433,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   },
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: ListTile(
-                  leading: const Icon(Icons.logout_rounded),
-                  title: const Text('লগআউট'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await FirebaseAuth.instance.signOut();
-                  },
-                ),
-              ),
+
             ],
           ),
           body: IndexedStack(
@@ -430,6 +445,7 @@ class _DashboardPageState extends State<DashboardPage> {
               MemberBalancesPage(messId: messId, service: _service),
               LoansPage(service: _service),
               ReportsPage(messId: messId),
+              SettingsPage(english: english, onToggleLanguage: onToggleLanguage, onToggleTheme: onToggleTheme),
             ],
           ),
           floatingActionButton: _tab == 1
@@ -489,3 +505,105 @@ class OverviewPage extends StatelessWidget {
       );
 }
 
+
+class VerifyEmailPage extends StatefulWidget {
+  const VerifyEmailPage({super.key});
+  @override
+  State<VerifyEmailPage> createState() => _VerifyEmailPageState();
+}
+class _VerifyEmailPageState extends State<VerifyEmailPage> {
+  bool _busy = false;
+  String? _message;
+  Future<void> _resend() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() { _busy = true; _message = null; });
+    try {
+      await user.sendEmailVerification();
+      if (mounted) setState(() => _message = 'নতুন verification link পাঠানো হয়েছে। Inbox ও Spam ফোল্ডার দেখুন।');
+    } on FirebaseAuthException catch (e) {
+      if (mounted) setState(() => _message = e.code == 'too-many-requests' ? 'অনেকবার চেষ্টা হয়েছে। কিছুক্ষণ পরে আবার চেষ্টা করুন।' : 'Verification email পাঠানো যায়নি (${e.code})।');
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('ইমেইল যাচাই')),
+    body: Center(child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 440), child: Column(
+        mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.mark_email_unread_outlined, size: 58),
+          const SizedBox(height: 16),
+          const Text('Finora ব্যবহার করতে আগে আপনার ইমেইল যাচাই করুন। Inbox এবং Spam ফোল্ডারে verification email দেখুন। যাচাই করার পর আবার লগইন করুন।', textAlign: TextAlign.center),
+          if (_message != null) ...[const SizedBox(height: 12), Text(_message!, textAlign: TextAlign.center)],
+          const SizedBox(height: 18),
+          FilledButton(onPressed: _busy ? null : _resend, child: Text(_busy ? 'পাঠানো হচ্ছে…' : 'Verification link আবার পাঠান')),
+          TextButton(onPressed: _busy ? null : () => FirebaseAuth.instance.signOut(), child: const Text('লগআউট')),
+        ],
+      )),
+    )),
+  );
+}
+
+class SettingsPage extends StatelessWidget {
+  const SettingsPage({super.key, required this.english, required this.onToggleLanguage, required this.onToggleTheme});
+  final bool english;
+  final VoidCallback onToggleLanguage;
+  final VoidCallback onToggleTheme;
+  @override
+  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(18), children: [
+    Text(english ? 'Settings' : 'সেটিংস', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+    const SizedBox(height: 12),
+    Card(child: ListTile(
+      leading: const Icon(Icons.language_outlined),
+      title: Text(english ? 'Language' : 'ভাষা'),
+      subtitle: Text(english ? 'Current: English' : 'বর্তমান: বাংলা'),
+      trailing: SegmentedButton<bool>(
+        segments: const [ButtonSegment(value: false, label: Text('বাংলা')), ButtonSegment(value: true, label: Text('English'))],
+        selected: <bool>{english},
+        onSelectionChanged: (values) { if (values.first != english) onToggleLanguage(); },
+      ),
+    )),
+    Card(child: ListTile(leading: const Icon(Icons.dark_mode_outlined), title: Text(english ? 'Appearance' : 'থিম পরিবর্তন'), subtitle: Text(english ? 'Switch light/dark theme' : 'লাইট ও ডার্ক থিম বদলান'), trailing: const Icon(Icons.chevron_right), onTap: onToggleTheme)),
+    Card(child: ListTile(
+      leading: const Icon(Icons.info_outline_rounded),
+      title: Text(english ? 'About Finora' : 'Finora সম্পর্কে'),
+      subtitle: const Text('Version 1.0.0'),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const AboutFinoraPage())),
+    )),
+    Card(child: ListTile(
+      leading: const Icon(Icons.logout_rounded),
+      title: Text(english ? 'Exit / Sign out' : 'এক্সিট / লগআউট'),
+      subtitle: Text(english ? 'Sign out of this account' : 'এই অ্যাকাউন্ট থেকে লগআউট করুন'),
+      onTap: () async {
+        final confirm = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
+          title: Text(english ? 'Sign out?' : 'লগআউট করবেন?'),
+          content: Text(english ? 'You will need to sign in again.' : 'আবার ব্যবহার করতে পুনরায় লগইন করতে হবে।'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(d, false), child: Text(english ? 'Cancel' : 'বাতিল')),
+            FilledButton(onPressed: () => Navigator.pop(d, true), child: Text(english ? 'Sign out' : 'লগআউট')),
+          ],
+        ));
+        if (confirm == true) await FirebaseAuth.instance.signOut();
+      },
+    )),
+  ]);
+}
+class AboutFinoraPage extends StatelessWidget {
+  const AboutFinoraPage({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Finora সম্পর্কে')),
+    body: ListView(padding: const EdgeInsets.all(24), children: const [
+      Icon(Icons.account_balance_wallet_rounded, size: 60),
+      SizedBox(height: 16),
+      Text('Finora', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+      SizedBox(height: 8),
+      Text('Mess Manager & Personal Finance'),
+      SizedBox(height: 18),
+      ListTile(leading: Icon(Icons.person_outline), title: Text('Developed by Md Arman')),
+      ListTile(leading: Icon(Icons.email_outlined), title: Text('mdarman0964@gmail.com')),
+      ListTile(leading: Icon(Icons.info_outline), title: Text('Version 1.0.0')),
+    ]),
+  );
+}
