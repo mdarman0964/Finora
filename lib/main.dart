@@ -374,6 +374,53 @@ class _DashboardPageState extends State<DashboardPage> {
               IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout_rounded), tooltip: 'লগআউট'),
             ],
           ),
+          drawer: NavigationDrawer(
+            selectedIndex: _tab,
+            onDestinationSelected: (value) {
+              Navigator.pop(context);
+              setState(() => _tab = value);
+            },
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 16, 16),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.account_balance_wallet_rounded, size: 36),
+                  const SizedBox(height: 8),
+                  Text('Finora', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                  Text(user.displayName ?? user.email ?? 'সদস্য', maxLines: 1, overflow: TextOverflow.ellipsis),
+                ]),
+              ),
+              const NavigationDrawerDestination(icon: Icon(Icons.home_outlined), label: Text('হোম ও মেস সেটআপ')),
+              const NavigationDrawerDestination(icon: Icon(Icons.receipt_long_outlined), label: Text('মেস ও ব্যক্তিগত খাতা')),
+              const NavigationDrawerDestination(icon: Icon(Icons.restaurant_outlined), label: Text('মিল ও মিল রেট')),
+              const NavigationDrawerDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: Text('সদস্যদের ব্যালেন্স')),
+              const NavigationDrawerDestination(icon: Icon(Icons.handshake_outlined), label: Text('ধার-দেনা ও পরিশোধ')),
+              const NavigationDrawerDestination(icon: Icon(Icons.bar_chart_outlined), label: Text('PDF / Excel রিপোর্ট')),
+              const Divider(indent: 20, endIndent: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.dark_mode_outlined),
+                  title: const Text('থিম পরিবর্তন'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    widget.onToggleTheme();
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: ListTile(
+                  leading: const Icon(Icons.logout_rounded),
+                  title: const Text('লগআউট'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await FirebaseAuth.instance.signOut();
+                  },
+                ),
+              ),
+            ],
+          ),
           body: IndexedStack(
             index: _tab,
             children: [
