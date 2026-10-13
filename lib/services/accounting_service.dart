@@ -1,22 +1,23 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'google_drive_receipt_service.dart';
 
 class AccountingService {
   AccountingService({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
-    FirebaseStorage? storage,
+    GoogleDriveReceiptService? driveReceipts,
   })  : _auth = auth ?? FirebaseAuth.instance,
         _db = firestore ?? FirebaseFirestore.instance,
-        _storage = storage ?? FirebaseStorage.instance;
+        _driveReceipts = driveReceipts ?? GoogleDriveReceiptService();
 
   final FirebaseAuth _auth;
   final FirebaseFirestore _db;
-  final FirebaseStorage _storage;
+  final GoogleDriveReceiptService _driveReceipts;
 
   User get user {
     final current = _auth.currentUser;
@@ -54,6 +55,7 @@ class AccountingService {
     batch.set(ref.collection('members').doc(uid), {
       'uid': uid,
       'displayName': current.displayName ?? 'Member',
+      'email': current.email,
       'joinedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
@@ -104,6 +106,7 @@ class AccountingService {
     batch.set(messRef.collection('members').doc(uid), {
       'uid': uid,
       'displayName': current.displayName ?? 'Member',
+      'email': current.email,
       if (!existingMembers.contains(uid)) 'joinedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -125,10 +128,12 @@ class AccountingService {
     final snapshot = await ref.get();
     final displayName = (current.displayName ?? '').trim();
     final savedName = (snapshot.data()?['displayName'] as String? ?? '').trim();
-    if (!snapshot.exists || (displayName.isNotEmpty && displayName != savedName)) {
+    final savedEmail = (snapshot.data()?['email'] as String? ?? '').trim();
+    if (!snapshot.exists || (displayName.isNotEmpty && displayName != savedName) || savedEmail != (current.email ?? '')) {
       await ref.set({
         'uid': uid,
         'displayName': displayName.isNotEmpty ? displayName : 'সদস্য',
+        'email': current.email,
         if (snapshot.data()?['joinedAt'] == null) 'joinedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -360,17 +365,46 @@ class AccountingService {
     required String scope,
     String? messId,
   }) async {
-    final uid = user.uid;
-    final path = scope == 'mess'
-        ? 'mess/${messId ?? ''}/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg'
-        : 'personal/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
-    final ref = _storage.ref().child('receipts/$path');
-    await ref.putFile(image, SettableMetadata(contentType: 'image/jpeg'));
-    return ref.fullPath;
+    final current = user;
+    final emails = <String>[];
+    if (scope == 'mess') {
+      if (messId == null || messId.isEmpty) {
+        throw ArgumentError('মেসের রসিদের জন্য মেস নির্বাচন করুন।');
+      }
+      await ensureCurrentMemberProfile(messId);
+      final mess = await _db.collection('messes').doc(messId).get();
+      final memberUids = (mess.data()?['memberUids'] as List<dynamic>? ?? const [])
+          .whereType<String>().toList();
+      final profiles = await getMemberProfiles(messId, memberUids);
+      final missingEmailUids = <String>[];
+      for (final uid in memberUids) {
+        final email = (profiles[uid]?['email'] as String? ?? '').trim();
+        if (email.isEmpty) {
+          missingEmailUids.add(uid);
+          continue;
+        }
+        if (email.toLowerCase() != (current.email ?? '').toLowerCase()) {
+          emails.add(email);
+        }
+      }
+      if (missingEmailUids.isNotEmpty) {
+        throw StateError(
+          'কিছু মেস সদস্যের ইমেইল প্রোফাইলে নেই (UID: ${missingEmailUids.join(', ')}). '
+          'প্রত্যেক সদস্যকে নিজের অ্যাকাউন্টে Finora-তে লগইন করতে বলুন; অ্যাপ তাদের সদস্য-প্রোফাইলে ইমেইল আপডেট করবে। '
+          'তারপর রসিদ আপলোড আবার চেষ্টা করুন।',
+        );
+      }
+    }
+    return _driveReceipts.uploadReceipt(
+      image,
+      scope: scope,
+      messId: messId,
+      shareWithEmails: emails,
+    );
   }
 
-  Future<String> receiptUrl(String storagePath) =>
-      _storage.ref().child(storagePath).getDownloadURL();
+  Future<Uint8List> receiptBytes(String receiptPath) =>
+      _driveReceipts.receiptBytes(receiptPath);
 
   Future<void> addLoan({
     required String counterpartyName,
