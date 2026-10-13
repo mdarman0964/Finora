@@ -376,14 +376,23 @@ class AccountingService {
       final memberUids = (mess.data()?['memberUids'] as List<dynamic>? ?? const [])
           .whereType<String>().toList();
       final profiles = await getMemberProfiles(messId, memberUids);
+      final missingEmailUids = <String>[];
       for (final uid in memberUids) {
         final email = (profiles[uid]?['email'] as String? ?? '').trim();
         if (email.isEmpty) {
-          throw StateError('সব সদস্যের Google অ্যাকাউন্টের ইমেইল এখনো পাওয়া যায়নি। প্রত্যেক সদস্যকে একবার অ্যাপ খুলতে বলুন।');
+          missingEmailUids.add(uid);
+          continue;
         }
         if (email.toLowerCase() != (current.email ?? '').toLowerCase()) {
           emails.add(email);
         }
+      }
+      if (missingEmailUids.isNotEmpty) {
+        throw StateError(
+          'কিছু মেস সদস্যের ইমেইল প্রোফাইলে নেই (UID: ${missingEmailUids.join(', ')}). '
+          'প্রত্যেক সদস্যকে নিজের অ্যাকাউন্টে Finora-তে লগইন করতে বলুন; অ্যাপ তাদের সদস্য-প্রোফাইলে ইমেইল আপডেট করবে। '
+          'তারপর রসিদ আপলোড আবার চেষ্টা করুন।',
+        );
       }
     }
     return _driveReceipts.uploadReceipt(
