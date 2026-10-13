@@ -546,9 +546,11 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
         if (mounted) setState(() => _message = 'এখনো verification status পাওয়া যায়নি। ইমেইলের লিঙ্কে ক্লিক করে কয়েক সেকেন্ড পর আবার চেষ্টা করুন।');
       }
     } on FirebaseAuthException catch (e) {
-      if (mounted) setState(() => _message = e.code == 'too-many-requests'
-          ? 'Firebase সাময়িকভাবে চেষ্টা সীমিত করেছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।'
-          : 'Verification status পরীক্ষা করা যায়নি (${e.code})। ইন্টারনেট পরীক্ষা করে আবার চেষ্টা করুন।');
+      if (mounted) {
+        setState(() => _message = e.code == 'too-many-requests'
+            ? 'Firebase সাময়িকভাবে চেষ্টা সীমিত করেছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।'
+            : 'Verification status পরীক্ষা করা যায়নি (${e.code})। ইন্টারনেট পরীক্ষা করে আবার চেষ্টা করুন।');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -572,9 +574,11 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
       _lastResendAt = DateTime.now();
       if (mounted) setState(() => _message = 'নতুন verification link পাঠানো হয়েছে। Inbox ও Spam ফোল্ডার দেখুন।');
     } on FirebaseAuthException catch (e) {
-      if (mounted) setState(() => _message = e.code == 'too-many-requests'
-          ? 'Firebase সাময়িকভাবে চেষ্টা সীমিত করেছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।'
-          : 'Verification email পাঠানো যায়নি (${e.code})।');
+      if (mounted) {
+        setState(() => _message = e.code == 'too-many-requests'
+            ? 'Firebase সাময়িকভাবে চেষ্টা সীমিত করেছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।'
+            : 'Verification email পাঠানো যায়নি (${e.code})।');
+      }
     } finally { if (mounted) setState(() => _busy = false); }
   }
   @override
