@@ -161,7 +161,11 @@ class _AuthPageState extends State<AuthPage> {
   Future<void> _signInWithGoogle() async {
     setState(() { _busy = true; _error = null; });
     try {
-      final googleUser = await GoogleSignIn(scopes: const ['email']).signIn();
+      const serverClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+      final googleUser = await GoogleSignIn(
+        scopes: const ['email'],
+        serverClientId: serverClientId.isEmpty ? null : serverClientId,
+      ).signIn();
       if (googleUser == null) return;
       final googleAuth = await googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
@@ -178,15 +182,48 @@ class _AuthPageState extends State<AuthPage> {
         }, SetOptions(merge: true));
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = e.message ?? e.code);
+      setState(() => _error = _authMessage(e));
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = 'Google লগইন করা যায়নি। Google provider ও OAuth configuration পরীক্ষা করুন।\\n$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
+  String _authMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'operation-not-allowed':
+        return 'এই লগইন পদ্ধতি Firebase Console → Authentication → Sign-in method-এ চালু করুন।';
+      case 'email-already-in-use':
+        return 'এই ইমেইলে আগে থেকেই অ্যাকাউন্ট আছে। লগইন করুন।';
+      case 'weak-password':
+        return 'আরও শক্তিশালী পাসওয়ার্ড দিন (কমপক্ষে ৬ অক্ষর)।';
+      case 'invalid-email':
+        return 'ইমেইল ঠিকানাটি সঠিক নয়।';
+      case 'user-not-found':
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'ইমেইল বা পাসওয়ার্ড সঠিক নয়।';
+      case 'network-request-failed':
+        return 'ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।';
+      default:
+        return e.message ?? e.code;
+    }
+  }
+
   Future<void> _submit() async {
+    if (_register && _name.text.trim().isEmpty) {
+      setState(() => _error = 'আপনার নাম লিখুন।');
+      return;
+    }
+    if (_email.text.trim().isEmpty || !_email.text.trim().contains('@')) {
+      setState(() => _error = 'সঠিক ইমেইল ঠিকানা লিখুন।');
+      return;
+    }
+    if (_password.text.length < 6) {
+      setState(() => _error = 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।');
+      return;
+    }
     setState(() { _busy = true; _error = null; });
     try {
       final auth = FirebaseAuth.instance;
@@ -212,9 +249,9 @@ class _AuthPageState extends State<AuthPage> {
         }, SetOptions(merge: true));
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = e.message ?? e.code);
+      setState(() => _error = _authMessage(e));
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = 'কাজটি সম্পন্ন হয়নি। Firebase configuration ও ইন্টারনেট পরীক্ষা করুন.\\n$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
