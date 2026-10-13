@@ -60,6 +60,54 @@ describe('Finora Firestore security rules', function () {
     };
   }
 
+
+  it('allows the owner to create a mess, owner profile, invite, and user pointer atomically', async function () {
+    const uid = 'new-owner';
+    const db = env.authenticatedContext(uid).firestore();
+    const batch = db.batch();
+    const messRef = doc(collection(db, 'messes'));
+    const inviteCode = 'ABCD234567';
+    batch.set(messRef, {
+      name: 'My new mess',
+      ownerUid: uid,
+      inviteCode,
+      memberUids: [uid],
+      defaultSplitStrategy: 'equal',
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    batch.set(doc(db, 'messes', messRef.id, 'members', uid), {
+      uid,
+      displayName: 'New Owner',
+      email: 'owner@example.com',
+      joinedAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    batch.set(doc(db, 'messInvites', inviteCode), {
+      messId: messRef.id,
+      ownerUid: uid,
+      createdAt: Timestamp.now(),
+    });
+    batch.set(doc(db, 'users', uid), {
+      displayName: 'New Owner',
+      email: 'owner@example.com',
+      messId: messRef.id,
+      updatedAt: Timestamp.now(),
+    });
+    await assertSucceeds(batch.commit());
+  });
+
+  it('does not let an authenticated user create a mess owned by someone else', async function () {
+    const db = env.authenticatedContext('attacker').firestore();
+    await assertFails(setDoc(doc(db, 'messes', 'spoofed'), {
+      name: 'Spoofed mess',
+      ownerUid: 'victim',
+      inviteCode: 'ABCD234567',
+      memberUids: ['victim'],
+      defaultSplitStrategy: 'equal',
+    }));
+  });
+
   it('allows a member to post a transaction in an open month', async function () {
     const db = env.authenticatedContext('member1').firestore();
     await assertSucceeds(addDoc(collection(db, 'messes', 'mess1', 'transactions'),
