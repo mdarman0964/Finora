@@ -65,13 +65,32 @@ class GoogleDriveReceiptService {
       try {
         for (final email in shareWithEmails.map((e) => e.trim().toLowerCase()).toSet()) {
           if (email.isEmpty) continue;
-          await api.permissions.create(
-            drive.Permission(type: 'user', role: 'reader', emailAddress: email),
-            id,
-            sendNotificationEmail: false,
-          );
+          try {
+            await api.permissions.create(
+              drive.Permission(type: 'user', role: 'reader', emailAddress: email),
+              id,
+              sendNotificationEmail: false,
+            );
+          } catch (error) {
+            final details = error.toString().toLowerCase();
+            if (details.contains('not found') ||
+                details.contains('notfound') ||
+                details.contains('invalid email') ||
+                details.contains('invalidemail') ||
+                details.contains('recipient')) {
+              throw StateError(
+                'Google Drive-এ এই ইমেইলটি শেয়ার করা যায়নি: $email। '
+                'সদস্যের ইমেইলটি সঠিক এবং Google Account-এর সঙ্গে যুক্ত কি না যাচাই করুন। '
+                'তারপর আবার চেষ্টা করুন।',
+              );
+            }
+            throw StateError(
+              'রসিদটি Google Drive-এ আপলোড হয়েছে, কিন্তু $email-কে শেয়ার করা যায়নি। '
+              'Google Drive API, OAuth permission এবং সদস্যের ইমেইল যাচাই করুন। ($error)',
+            );
+          }
         }
-      } catch (_) {
+      } catch (error) {
         // Avoid leaving an inaccessible shared receipt in Drive if sharing fails.
         try {
           await api.files.delete(id);
