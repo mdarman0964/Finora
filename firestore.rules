@@ -42,7 +42,12 @@ service cloud.firestore {
     }
 
     match /messes/{messId} {
-      allow read: if isMessMember(messId);
+      allow get: if isMessMember(messId)
+        || (signedIn()
+          && resource.data.inviteCode is string
+          && exists(/databases/$(database)/documents/messInvites/$(resource.data.inviteCode))
+          && get(/databases/$(database)/documents/messInvites/$(resource.data.inviteCode)).data.messId == messId);
+      allow list: if isMessMember(messId);
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.memberUids is list
