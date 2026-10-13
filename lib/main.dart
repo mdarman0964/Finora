@@ -229,7 +229,7 @@ class _AuthPageState extends State<AuthPage> {
     if (password.length < 8) return 'পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে।';
     if (!RegExp(r'[A-Z]').hasMatch(password)) return 'পাসওয়ার্ডে অন্তত একটি বড় ইংরেজি অক্ষর (A–Z) দিন।';
     if (!RegExp(r'[a-z]').hasMatch(password)) return 'পাসওয়ার্ডে অন্তত একটি ছোট ইংরেজি অক্ষর (a–z) দিন।';
-    if (!RegExp(r'\\d').hasMatch(password)) return 'পাসওয়ার্ডে অন্তত একটি সংখ্যা দিন।';
+    if (!RegExp(r'\d').hasMatch(password)) return 'পাসওয়ার্ডে অন্তত একটি সংখ্যা দিন।';
     if (!RegExp(r'[^A-Za-z0-9]').hasMatch(password)) return 'পাসওয়ার্ডে অন্তত একটি বিশেষ চিহ্ন দিন (যেমন !@#)।';
     return null;
   }
@@ -378,6 +378,7 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   int _tab = 0;
+  String? _syncedMessId;
   final _service = AccountingService();
 
   @override
@@ -387,6 +388,17 @@ class _DashboardPageState extends State<DashboardPage> {
       stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
       builder: (context, profileSnapshot) {
         final messId = profileSnapshot.data?.data()?['messId'] as String?;
+        if (messId != null && _syncedMessId != messId) {
+          _syncedMessId = messId;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!mounted) return;
+            try {
+              await _service.ensureCurrentMemberProfile(messId);
+            } catch (_) {
+              // Profile sync failures should not block the rest of the app.
+            }
+          });
+        }
         return Scaffold(
           appBar: AppBar(
             title: const Text('Finora', style: TextStyle(fontWeight: FontWeight.w800)),
