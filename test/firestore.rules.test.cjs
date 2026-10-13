@@ -25,6 +25,11 @@ describe('Finora Firestore security rules', function () {
         memberUids: ['owner1', 'member1'],
         defaultSplitStrategy: 'equal',
       });
+      await setDoc(doc(db, 'messInvites', 'ABC123'), {
+        messId: 'mess1',
+        ownerUid: 'owner1',
+        createdAt: Timestamp.now(),
+      });
       await setDoc(doc(db, 'messes', 'mess1', 'monthClosures', '2026-09'), {
         monthKey: '2026-09',
         closedBy: 'owner1',
@@ -106,6 +111,34 @@ describe('Finora Firestore security rules', function () {
       memberUids: ['victim'],
       defaultSplitStrategy: 'equal',
     }));
+  });
+
+  it('allows a signed-in user to join a mess through a valid invite code', async function () {
+    const uid = 'member2';
+    const db = env.authenticatedContext(uid).firestore();
+    const messRef = doc(db, 'messes', 'mess1');
+    const invite = await assertSucceeds(getDoc(doc(db, 'messInvites', 'ABC123')));
+    if (!invite.exists()) throw new Error('Test invite should exist');
+    await assertSucceeds(getDoc(messRef));
+    const batch = db.batch();
+    batch.update(messRef, {
+      memberUids: ['owner1', 'member1', uid],
+      updatedAt: Timestamp.now(),
+    });
+    batch.set(doc(db, 'messes', 'mess1', 'members', uid), {
+      uid,
+      displayName: 'Member Two',
+      email: 'member2@example.com',
+      joinedAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    batch.set(doc(db, 'users', uid), {
+      displayName: 'Member Two',
+      email: 'member2@example.com',
+      messId: 'mess1',
+      updatedAt: Timestamp.now(),
+    });
+    await assertSucceeds(batch.commit());
   });
 
   it('allows a member to post a transaction in an open month', async function () {
