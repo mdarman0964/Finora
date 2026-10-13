@@ -138,7 +138,7 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
+        stream: FirebaseAuth.instance.userChanges(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -269,9 +269,9 @@ class _AuthPageState extends State<AuthPage> {
           password: _password.text,
         );
         if (result.user != null && !result.user!.emailVerified) {
-          await result.user!.sendEmailVerification();
+          // Avoid sending an email on every login attempt; this can trigger rate limits.
           await auth.signOut();
-          if (mounted) setState(() => _error = 'আপনার ইমেইল এখনো যাচাই করা হয়নি। নতুন verification link পাঠানো হয়েছে—ইমেইল যাচাই করে আবার লগইন করুন।');
+          if (mounted) setState(() => _error = 'আপনার ইমেইল এখনো যাচাই করা হয়নি। Inbox/Spam থেকে আগের verification link খুলুন, তারপর আবার লগইন করুন।');
           return;
         }
       }
@@ -526,15 +526,55 @@ class VerifyEmailPage extends StatefulWidget {
 class _VerifyEmailPageState extends State<VerifyEmailPage> {
   bool _busy = false;
   String? _message;
+  DateTime? _lastResendAt;
+
+  Future<void> _checkVerification() async {
+    setState(() { _busy = true; _message = null; });
+    try {
+      final auth = FirebaseAuth.instance;
+      final user = auth.currentUser;
+      if (user == null) {
+        if (mounted) setState(() => _message = 'আপনি লগইন অবস্থায় নেই। ইমেইল যাচাই করার পর আবার লগইন করুন।');
+        return;
+      }
+      await user.reload();
+      final refreshedUser = auth.currentUser;
+      if (refreshedUser?.emailVerified == true) {
+        await refreshedUser!.getIdToken(true);
+        if (mounted) setState(() => _message = 'ইমেইল যাচাই সফল হয়েছে। অ্যাপ আপডেট হচ্ছে…');
+      } else {
+        if (mounted) setState(() => _message = 'এখনো verification status পাওয়া যায়নি। ইমেইলের লিঙ্কে ক্লিক করে কয়েক সেকেন্ড পর আবার চেষ্টা করুন।');
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) setState(() => _message = e.code == 'too-many-requests'
+          ? 'Firebase সাময়িকভাবে চেষ্টা সীমিত করেছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।'
+          : 'Verification status পরীক্ষা করা যায়নি (${e.code})। ইন্টারনেট পরীক্ষা করে আবার চেষ্টা করুন।');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _resend() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      setState(() => _message = 'নিরাপত্তার জন্য আগে লগইন করুন, তারপর verification link আবার পাঠাতে পারবেন।');
+      return;
+    }
+    final last = _lastResendAt;
+    if (last != null && DateTime.now().difference(last) < const Duration(seconds: 60)) {
+      final remaining = 60 - DateTime.now().difference(last).inSeconds;
+      setState(() => _message = 'আবার ইমেইল পাঠানোর আগে $remaining সেকেন্ড অপেক্ষা করুন।');
+      return;
+    }
     setState(() { _busy = true; _message = null; });
     try {
       await user.sendEmailVerification();
+      _lastResendAt = DateTime.now();
       if (mounted) setState(() => _message = 'নতুন verification link পাঠানো হয়েছে। Inbox ও Spam ফোল্ডার দেখুন।');
     } on FirebaseAuthException catch (e) {
-      if (mounted) setState(() => _message = e.code == 'too-many-requests' ? 'অনেকবার চেষ্টা হয়েছে। কিছুক্ষণ পরে আবার চেষ্টা করুন।' : 'Verification email পাঠানো যায়নি (${e.code})।');
+      if (mounted) setState(() => _message = e.code == 'too-many-requests'
+          ? 'Firebase সাময়িকভাবে চেষ্টা সীমিত করেছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।'
+          : 'Verification email পাঠানো যায়নি (${e.code})।');
     } finally { if (mounted) setState(() => _busy = false); }
   }
   @override
@@ -546,10 +586,12 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
         mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.mark_email_unread_outlined, size: 58),
           const SizedBox(height: 16),
-          const Text('Finora ব্যবহার করতে আগে আপনার ইমেইল যাচাই করুন। Inbox এবং Spam ফোল্ডারে verification email দেখুন। যাচাই করার পর আবার লগইন করুন।', textAlign: TextAlign.center),
+          const Text('আপনার ইমেইলে পাঠানো verification link খুলুন। যাচাই করার পর নিচের বাটনে চাপ দিয়ে status refresh করুন।', textAlign: TextAlign.center),
           if (_message != null) ...[const SizedBox(height: 12), Text(_message!, textAlign: TextAlign.center)],
           const SizedBox(height: 18),
-          FilledButton(onPressed: _busy ? null : _resend, child: Text(_busy ? 'পাঠানো হচ্ছে…' : 'Verification link আবার পাঠান')),
+          FilledButton(onPressed: _busy ? null : _checkVerification, child: Text(_busy ? 'পরীক্ষা করা হচ্ছে…' : 'আমি ইমেইল যাচাই করেছি')),
+          const SizedBox(height: 8),
+          OutlinedButton(onPressed: _busy ? null : _resend, child: Text(_busy ? 'অপেক্ষা করুন…' : 'Verification link আবার পাঠান')),
           TextButton(onPressed: _busy ? null : () => FirebaseAuth.instance.signOut(), child: const Text('লগআউট')),
         ],
       )),
