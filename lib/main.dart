@@ -401,7 +401,7 @@ class _DashboardPageState extends State<DashboardPage> {
         }
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Finora', style: TextStyle(fontWeight: FontWeight.w800)),
+            title: Text(english ? 'Finora' : 'Finora', style: const TextStyle(fontWeight: FontWeight.w800)),
             actions: [
               IconButton(
                 onPressed: () => setState(() => _tab = 6),
@@ -426,12 +426,12 @@ class _DashboardPageState extends State<DashboardPage> {
                   Text(user.displayName ?? user.email ?? 'সদস্য', maxLines: 1, overflow: TextOverflow.ellipsis),
                 ]),
               ),
-              const NavigationDrawerDestination(icon: Icon(Icons.home_outlined), label: Text('হোম ও মেস সেটআপ')),
-              const NavigationDrawerDestination(icon: Icon(Icons.receipt_long_outlined), label: Text('মেস ও ব্যক্তিগত খাতা')),
-              const NavigationDrawerDestination(icon: Icon(Icons.restaurant_outlined), label: Text('মিল ও মিল রেট')),
-              const NavigationDrawerDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: Text('সদস্যদের ব্যালেন্স')),
-              const NavigationDrawerDestination(icon: Icon(Icons.handshake_outlined), label: Text('ধার-দেনা ও পরিশোধ')),
-              const NavigationDrawerDestination(icon: Icon(Icons.bar_chart_outlined), label: Text('PDF / Excel রিপোর্ট')),
+              NavigationDrawerDestination(icon: const Icon(Icons.home_outlined), label: Text(english ? 'Home & mess setup' : 'হোম ও মেস সেটআপ')),
+              NavigationDrawerDestination(icon: const Icon(Icons.receipt_long_outlined), label: Text(english ? 'Mess & personal ledger' : 'মেস ও ব্যক্তিগত খাতা')),
+              NavigationDrawerDestination(icon: const Icon(Icons.restaurant_outlined), label: Text(english ? 'Meals & meal rate' : 'মিল ও মিল রেট')),
+              NavigationDrawerDestination(icon: const Icon(Icons.account_balance_wallet_outlined), label: Text(english ? 'Member balances' : 'সদস্যদের ব্যালেন্স')),
+              NavigationDrawerDestination(icon: const Icon(Icons.handshake_outlined), label: Text(english ? 'Loans & repayments' : 'ধার-দেনা ও পরিশোধ')),
+              NavigationDrawerDestination(icon: const Icon(Icons.bar_chart_outlined), label: Text(english ? 'PDF / Excel reports' : 'PDF / Excel রিপোর্ট')),
               NavigationDrawerDestination(icon: const Icon(Icons.settings_outlined), label: Text(english ? 'Settings' : 'সেটিংস')),
               const Divider(indent: 20, endIndent: 20),
               Padding(
@@ -471,9 +471,9 @@ class _DashboardPageState extends State<DashboardPage> {
                 )
               : null,
           bottomNavigationBar: NavigationBar(
-            selectedIndex: _tab,
+            selectedIndex: _tab < 6 ? _tab : 0,
             onDestinationSelected: (value) => setState(() => _tab = value),
-            destinations: const [
+            destinations: [
               NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'হোম'),
               NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'হিসাব'),
               NavigationDestination(icon: Icon(Icons.restaurant_outlined), selectedIcon: Icon(Icons.restaurant), label: 'মিল'),
