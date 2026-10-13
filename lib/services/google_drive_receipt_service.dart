@@ -38,9 +38,8 @@ class GoogleDriveReceiptService {
     String? messId,
     List<String> shareWithEmails = const <String>[],
   }) async {
-    if (scope == 'mess' && shareWithEmails.isEmpty) {
-      throw StateError('মেসের সদস্যদের Google অ্যাকাউন্টের ইমেইল পাওয়া যায়নি। সদস্যদের অ্যাপ খুলে আবার চেষ্টা করতে বলুন।');
-    }
+    // A one-member mess has nobody else to share with. An empty recipient
+    // list is valid; multi-member recipient validation happens in AccountingService.
     final api = await _api();
     final file = await api.files.create(
       drive.File(
